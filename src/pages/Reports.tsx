@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, Calendar, Users, BookOpen, Phone, MessageCircle, Download, TrendingDown, X, AlertTriangle, Search, FileText, Clock } from 'lucide-react';
+import { Filter, Calendar, Users, BookOpen, Phone, MessageCircle, Download, TrendingDown, X, AlertTriangle, Search, FileText, Clock, RefreshCw } from 'lucide-react';
 import ReportTable from '../components/ReportTable';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
@@ -32,6 +32,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Available options for filters
   const [availableFields, setAvailableFields] = useState<string[]>([]);
@@ -76,22 +77,28 @@ export default function Reports() {
           ...(filters.matricule && { matricule: filters.matricule }),
         };
 
+        console.log('Fetching from API with params:', filterParams);
         reportData = await APIService.getAbsenteeReport(filterParams);
-        console.log('API report data:', reportData);
-      } catch (apiError) {
-        console.log('API failed, checking local data...');
+        console.log('API report data received:', reportData);
         
-        // Fallback to local absentee records from rollcall submissions
-        const localAbsentees = LocalDBService.getCachedData('rollcall_absentee_records') || [];
-        console.log('Local absentee records:', localAbsentees);
-        reportData = localAbsentees;
+        if (reportData && reportData.length > 0) {
+          console.log('Successfully loaded', reportData.length, 'records from API');
+        } else {
+          console.log('No data returned from API, checking for empty result vs error');
+        }
+        
+      } catch (apiError) {
+        console.log('API failed, will not use fallback data for reports:', apiError);
+        // For reports, we want to show that there's no data rather than showing stale local data
+        reportData = [];
+        setError('Unable to fetch latest report data from database. Please check your connection and try again.');
       }
 
       // Store all data for filtering
-      setAllAbsentees(reportData);
+      setAllAbsentees(reportData || []);
 
       // Apply client-side filters
-      let filteredData = [...reportData];
+      let filteredData = [...(reportData || [])];
 
       // Apply date filters
       if (filters.reportType === 'custom' || filters.dateFrom || filters.dateTo) {
@@ -158,7 +165,7 @@ export default function Reports() {
         );
       }
 
-      console.log('Filtered data:', filteredData);
+      console.log('Final filtered data:', filteredData);
       setAbsentees(filteredData);
       
       if (filteredData.length > 0) {
@@ -172,6 +179,12 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefreshReports = async () => {
+    setRefreshing(true);
+    await loadAbsenteeReport();
+    setRefreshing(false);
   };
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
@@ -294,6 +307,15 @@ export default function Reports() {
         
         <div className="flex items-center space-x-3 mt-4 sm:mt-0">
           <button
+            onClick={handleRefreshReports}
+            disabled={refreshing}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
+          </button>
+          
+          <button
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -304,7 +326,7 @@ export default function Reports() {
           {absentees.length > 0 && (
             <button
               onClick={exportReport}
-              className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
             >
               <Download className="w-4 h-4" />
               <span>Export CSV</span>
@@ -565,7 +587,15 @@ export default function Reports() {
       {/* Error Message */}
       {error && (
         <div className="bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 rounded-lg p-4">
-          <p className="text-red-800 dark:text-red-200">{error}</p>
+          <div className="flex items-center">
+            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" />
+            <div>
+              <p className="text-red-800 dark:text-red-200 font-medium">{error}</p>
+              <p className="text-red-600 dark:text-red-400 text-sm mt-1">
+                Try refreshing the data or check if attendance has been submitted recently.
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -686,8 +716,16 @@ export default function Reports() {
           <ul className="text-sm text-gray-500 dark:text-gray-400 mt-2 space-y-1">
             <li>• All students were present during the selected period</li>
             <li>• No rollcall sessions have been conducted yet</li>
-            <li>• Try adjusting your filter criteria</li>
+            <li>• Try adjusting your filter criteria or refresh the data</li>
           </ul>
+          <button
+            onClick={handleRefreshReports}
+            disabled={refreshing}
+            className="mt-4 flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors mx-auto"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
+          </button>
         </div>
       )}
     </div>

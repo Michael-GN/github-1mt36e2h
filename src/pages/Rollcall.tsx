@@ -129,6 +129,7 @@ IME Discipline Master`;
       // Submit each attendance record directly to database
       let successCount = 0;
       let failedCount = 0;
+      const absentStudents = students.filter(student => student.isPresent === false);
 
       for (const record of attendanceRecords) {
         const student = students.find(s => s.id === record.studentId);
@@ -167,57 +168,49 @@ IME Discipline Master`;
           `Attendance saved to database successfully for ${successCount} students!` +
           (failedCount > 0 ? ` ${failedCount} records failed to save.` : '')
         );
+
+        // Generate absentee list for local display
+        const absenteeRecords: AbsenteeRecord[] = absentStudents.map(student => ({
+          id: `${selectedSession.id}-${student.id}-${Date.now()}`,
+          studentName: student.name,
+          matricule: student.matricule,
+          fieldName: student.field,
+          level: student.level,
+          courseTitle: selectedSession.courseTitle,
+          courseCode: selectedSession.courseCode,
+          parentPhone: student.parentPhone,
+          parentName: student.parentName,
+          parentEmail: student.parentEmail,
+          date: new Date().toISOString(),
+          sessionId: selectedSession.id,
+        }));
+
+        setAbsentees(absenteeRecords);
+
+        // Mark session as completed
+        markSessionAsCompleted(selectedSession.id);
+
+        // Remove the session from available sessions
+        setAvailableSessions(prev => prev.filter(session => session.id !== selectedSession.id));
+        
+        // Show absentee summary if there are absentees
+        if (absenteeRecords.length > 0) {
+          setShowAbsentees(true);
+        } else {
+          // If no absentees, show success and go back to sessions
+          setTimeout(() => {
+            setSelectedSession(null);
+            setSuccessMessage(null);
+          }, 3000);
+        }
+
+        // Clear success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
+
       } else {
         setError('Failed to save attendance records to database. Please try again.');
         return;
       }
-
-      // Generate absentee list for local display
-      const absentStudents = students.filter(student => student.isPresent === false);
-      const absenteeRecords: AbsenteeRecord[] = absentStudents.map(student => ({
-        id: `${selectedSession.id}-${student.id}-${Date.now()}`,
-        studentName: student.name,
-        matricule: student.matricule,
-        fieldName: student.field,
-        level: student.level,
-        courseTitle: selectedSession.courseTitle,
-        courseCode: selectedSession.courseCode,
-        parentPhone: student.parentPhone,
-        parentName: student.parentName,
-        parentEmail: student.parentEmail,
-        date: new Date().toISOString(),
-        sessionId: selectedSession.id,
-      }));
-
-      // Save absentees for local reporting
-      if (absenteeRecords.length > 0) {
-        const existingAbsentees = LocalDBService.getCachedData('rollcall_absentee_records') || [];
-        const updatedAbsentees = [...existingAbsentees, ...absenteeRecords];
-        LocalDBService.cacheData('rollcall_absentee_records', updatedAbsentees);
-        console.log('Saved absentee records for local reporting:', absenteeRecords);
-      }
-
-      setAbsentees(absenteeRecords);
-
-      // Mark session as completed
-      markSessionAsCompleted(selectedSession.id);
-
-      // Remove the session from available sessions
-      setAvailableSessions(prev => prev.filter(session => session.id !== selectedSession.id));
-      
-      // Show absentee summary if there are absentees
-      if (absenteeRecords.length > 0) {
-        setShowAbsentees(true);
-      } else {
-        // If no absentees, show success and go back to sessions
-        setTimeout(() => {
-          setSelectedSession(null);
-          setSuccessMessage(null);
-        }, 3000);
-      }
-
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000);
 
     } catch (error) {
       console.error('Failed to submit attendance to database:', error);
