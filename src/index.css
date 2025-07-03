@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark mode improvements */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply transition-colors duration-300;
+  }
+  
+  .dark {
+    color-scheme: dark;
+  }
+  
+  /* Improved dark mode text contrast */
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+  
+  .dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+    @apply text-gray-50;
+  }
+  
+  .dark p {
+    @apply text-gray-200;
+  }
+  
+  /* Better form controls in dark mode */
+  .dark input, .dark select, .dark textarea {
+    @apply bg-gray-800 border-gray-600 text-gray-100 placeholder-gray-400;
+  }
+  
+  .dark input:focus, .dark select:focus, .dark textarea:focus {
+    @apply border-blue-500 ring-blue-500;
+  }
+  
+  /* Enhanced card styling in dark mode */
+  .dark .bg-white {
+    @apply bg-gray-800 border-gray-700;
+  }
+  
+  /* Better button contrast in dark mode */
+  .dark button:not(.bg-blue-600):not(.bg-red-600):not(.bg-green-600):not(.bg-yellow-600):not(.bg-purple-600) {
+    @apply text-gray-100;
+  }
+  
+  /* Improved table styling in dark mode */
+  .dark table {
+    @apply bg-gray-800;
+  }
+  
+  .dark th {
+    @apply bg-gray-700 text-gray-200;
+  }
+  
+  .dark td {
+    @apply text-gray-200 border-gray-700;
+  }
+  
+  /* Better modal backdrop */
+  .dark .bg-black.bg-opacity-50 {
+    @apply bg-gray-900 bg-opacity-75 backdrop-blur-sm;
+  }
+}
+
+/* Custom scrollbar */
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #6b7280 #f3f4f6;
+  }
+  
+  .dark .scrollbar-thin {
+    scrollbar-color: #4b5563 #1f2937;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-gray-100 dark:bg-gray-800;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 dark:bg-gray-600 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500 dark:bg-gray-500;
+  }
+}
+
+/* Print styles */
+@media print {
+  .print\\:hidden {
+    display: none !important;
+  }
+  
+  .print\\:block {
+    display: block !important;
+  }
+  
+  .print\\:text-black {
+    color: #000 !important;
+  }
+  
+  .print\\:bg-white {
+    background-color: #fff !important;
+  }
+  
+  .print\\:border-black {
+    border-color: #000 !important;
+  }
+  
+  @page {
+    margin: 0.5in;
+    size: landscape;
+  }
+}
+
+/* Animation improvements */
+@keyframes shimmer {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200px 100%;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background-size: 200px 100%;
+}
+
+/* Focus improvements */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800;
+  }
+}
+
+/* Smooth transitions */
+* {
+  @apply transition-colors duration-200;
+}
+
+/* Better hover states */
+.hover-lift {
+  @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
+}
+
+.dark .hover-lift:hover {
+  @apply shadow-dark-lg;
+}
