@@ -208,18 +208,18 @@ export class APIService {
     }
   }
 
-  // Enhanced dashboard stats
+  // Enhanced dashboard stats - now fetches real-time data from database
   static async getDashboardStats() {
     try {
-      console.log('Fetching dashboard stats...');
+      console.log('Fetching dashboard stats from database...');
       
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/get_dashboard_stats.php`);
       const data = await this.handleResponse(response);
       
-      console.log('Dashboard stats:', data);
+      console.log('Dashboard stats from API:', data);
       return data;
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error);
+      console.error('Failed to fetch dashboard stats from API:', error);
       throw error;
     }
   }

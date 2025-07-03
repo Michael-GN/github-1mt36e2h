@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, AlertTriangle, Calendar, BookOpen, Search, X } from 'lucide-react';
+import { Clock, User, AlertTriangle, Calendar, BookOpen, Search, X, RefreshCw } from 'lucide-react';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
 import type { Student } from '../types';
@@ -32,6 +32,7 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [searchResult, setSearchResult] = useState<StudentAbsenteeHours | null>(null);
   const [showSearchResult, setShowSearchResult] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadAbsenteeHours();
@@ -42,14 +43,28 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       setLoading(true);
       setError(null);
       
+      console.log('Loading student absentee hours from database...');
+      
       // Get absentee data from the database
-      const absenteeData = await APIService.getStudentAbsenteeHours();
+      let absenteeData = [];
+      try {
+        absenteeData = await APIService.getAbsenteeReport({
+          report_type: 'monthly', // Get all records from this month
+          date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+          date_to: new Date().toISOString().split('T')[0]
+        });
+        console.log('Absentee data from database:', absenteeData);
+      } catch (apiError) {
+        console.log('Failed to fetch from API, will show all students with zero hours');
+        absenteeData = [];
+      }
       
       // Process the data to calculate hours for each student
       const hoursData: StudentAbsenteeHours[] = students.map(student => {
         // Find all absentee records for this student
         const studentAbsences = absenteeData.filter((record: any) => 
-          record.studentId === student.id || record.matricule === student.matricule
+          record.studentName === student.name || 
+          record.matricule === student.matricule
         );
 
         // Calculate total hours and sessions
@@ -57,15 +72,14 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
           date: absence.date,
           course: absence.courseTitle,
           courseCode: absence.courseCode,
-          duration: calculateSessionDuration(absence.timeSlot),
-          timeSlot: absence.timeSlot
+          duration: calculateSessionDuration(absence.timeSlot || '2 hours'), // Default if no time slot
+          timeSlot: absence.timeSlot || 'Unknown time'
         }));
 
-       const totalAbsentHours = absentSessions.reduce(
-             (sum: number, session: { duration: number }) => sum + session.duration,
-              0
+        const totalAbsentHours = absentSessions.reduce(
+          (sum: number, session: { duration: number }) => sum + session.duration,
+          0
         );
-
 
         return {
           studentId: student.id,
@@ -78,6 +92,7 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
         };
       });
 
+      console.log('Processed absentee hours data:', hoursData);
       setAbsenteeHours(hoursData);
       
       // Cache the processed data
@@ -85,28 +100,43 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
 
     } catch (error) {
       console.error('Failed to load absentee hours:', error);
-      setError('Failed to load absentee hours data. Please try again.');
+      setError('Failed to load absentee hours data. Please try refreshing.');
       
       // Try to load from cache as fallback
       const cachedData = LocalDBService.getCachedData('rollcall_cached_absentee_hours');
       if (cachedData) {
         setAbsenteeHours(cachedData);
+        setError('Showing cached data. Click refresh for latest information.');
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadAbsenteeHours();
+    setRefreshing(false);
+  };
+
   const calculateSessionDuration = (timeSlot: string): number => {
-    if (!timeSlot) return 2; // Default 2 hours
+    if (!timeSlot || timeSlot === 'Unknown time') return 2; // Default 2 hours
     
     try {
-      const [startTime, endTime] = timeSlot.split(' - ');
-      const start = new Date(`2000-01-01 ${startTime}`);
-      const end = new Date(`2000-01-01 ${endTime}`);
-      const diffInMs = end.getTime() - start.getTime();
-      const diffInHours = diffInMs / (1000 * 60 * 60);
-      return Math.max(diffInHours, 1); // Minimum 1 hour
+      // Handle different time slot formats
+      if (timeSlot.includes(' - ')) {
+        const [startTime, endTime] = timeSlot.split(' - ');
+        const start = new Date(`2000-01-01 ${startTime}`);
+        const end = new Date(`2000-01-01 ${endTime}`);
+        const diffInMs = end.getTime() - start.getTime();
+        const diffInHours = diffInMs / (1000 * 60 * 60);
+        return Math.max(diffInHours, 1); // Minimum 1 hour
+      } else if (timeSlot.includes('hour')) {
+        // Extract number from strings like "2 hours"
+        const match = timeSlot.match(/(\d+)/);
+        return match ? parseInt(match[1]) : 2;
+      }
+      return 2; // Default 2 hours
     } catch (error) {
       console.error('Error calculating session duration:', error);
       return 2; // Default 2 hours
@@ -167,7 +197,7 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       <div className="bg-white rounded-xl p-6 shadow-lg border-2 border-black">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-black">Loading absentee hours...</p>
+          <p className="text-black">Loading absentee hours from database...</p>
         </div>
       </div>
     );
@@ -198,7 +228,17 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
     <div className="space-y-6">
       {/* Header with Stats */}
       <div className="bg-blue-600 rounded-xl p-6 text-white">
-        <h2 className="text-xl font-bold mb-4">Student Absentee Hours</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold">Student Absentee Hours</h2>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="flex items-center space-x-2 px-4 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+        </div>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white bg-opacity-20 rounded-lg p-4">
@@ -232,6 +272,21 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
         </div>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
+            <div>
+              <p className="text-yellow-800 font-medium">{error}</p>
+              <p className="text-yellow-700 text-sm mt-1">
+                Data may not be up to date. Click refresh to get the latest information.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Student Search */}
       <div className="bg-white rounded-xl p-6 shadow-lg border-2 border-black">
         <h3 className="text-lg font-medium text-black mb-4">Search Student Absentee Hours</h3>
@@ -264,13 +319,6 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
             </button>
           )}
         </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-            <p className="text-red-600 text-sm">{error}</p>
-          </div>
-        )}
 
         {/* Search Result */}
         {showSearchResult && searchResult && (
@@ -512,6 +560,14 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
           <User className="w-16 h-16 text-black mx-auto mb-4" />
           <h3 className="text-lg font-medium text-black mb-2">No data available</h3>
           <p className="text-black">No absentee hours data found for the selected criteria.</p>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="mt-4 flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors mx-auto"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh Data'}</span>
+          </button>
         </div>
       )}
     </div>

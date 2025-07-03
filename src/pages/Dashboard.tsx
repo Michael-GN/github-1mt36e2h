@@ -38,71 +38,84 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       
-      console.log('Loading dashboard stats...');
+      console.log('Loading dashboard stats from database...');
       
       let dashboardData;
       try {
+        // Try to get real-time data from database
         dashboardData = await APIService.getDashboardStats();
-        console.log('API dashboard data:', dashboardData);
+        console.log('Dashboard data from API:', dashboardData);
+        
+        if (!dashboardData) {
+          console.log('No data from API, generating from database records...');
+          dashboardData = await generateStatsFromDatabase();
+        }
       } catch (apiError) {
-        console.log('API failed, generating stats from local data...');
-        dashboardData = await generateStatsFromLocalData();
+        console.log('API failed, generating stats from database records...');
+        dashboardData = await generateStatsFromDatabase();
       }
       
       setStats(dashboardData);
       LocalDBService.cacheData('rollcall_cached_dashboard', dashboardData);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);
-      setError('Failed to load dashboard statistics. Using local data if available.');
+      setError('Failed to load dashboard statistics. Please try refreshing.');
       
-      // Try to load from cache as fallback
+      // Try to load from cache as last resort
       const cachedData = LocalDBService.getCachedData('rollcall_cached_dashboard');
       if (cachedData) {
         setStats(cachedData);
-      } else {
-        // Generate basic stats from local data
-        const localStats = await generateStatsFromLocalData();
-        setStats(localStats);
+        setError('Showing cached data. Click refresh for latest statistics.');
       }
     } finally {
       setLoading(false);
     }
   };
 
-  const generateStatsFromLocalData = async () => {
+  const generateStatsFromDatabase = async () => {
     try {
-      console.log('Generating stats from local data...');
+      console.log('Generating stats from database records...');
       
-      // Get local data
-      const students = await APIService.getStudents();
-      const fields = await APIService.getFields();
-      const absenteeRecords = LocalDBService.getCachedData('rollcall_absentee_records') || [];
+      // Get data from database APIs
+      const [students, fields, absenteeRecords] = await Promise.all([
+        APIService.getStudents(),
+        APIService.getFields(),
+        APIService.getAbsenteeReport({
+          report_type: 'monthly', // Get all records from this month
+          date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+          date_to: new Date().toISOString().split('T')[0]
+        })
+      ]);
       
-      console.log('Local data:', { students: students.length, fields: fields.length, absentees: absenteeRecords.length });
+      console.log('Database data:', { 
+        students: students?.length || 0, 
+        fields: fields?.length || 0, 
+        absentees: absenteeRecords?.length || 0 
+      });
 
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      // Calculate absentees by time period
-      const todayAbsentees = absenteeRecords.filter(record => 
-        record.date.split('T')[0] === todayStr
-      ).length;
+      // Calculate absentees by time period from database records
+      const todayAbsentees = (absenteeRecords || []).filter(record => {
+        const recordDate = new Date(record.date).toISOString().split('T')[0];
+        return recordDate === todayStr;
+      }).length;
 
-      const weeklyAbsentees = absenteeRecords.filter(record => 
+      const weeklyAbsentees = (absenteeRecords || []).filter(record => 
         new Date(record.date) >= weekAgo
       ).length;
 
-      const monthlyAbsentees = absenteeRecords.filter(record => 
-        new Date(record.date) >= monthAgo
-      ).length;
+      const monthlyAbsentees = (absenteeRecords || []).length;
 
-      // Calculate field stats
-      const fieldStats: FieldStats[] = fields.map(field => {
-        const fieldStudents = students.filter(student => student.field === field.name);
-        const fieldAbsentees = absenteeRecords.filter(record => 
-          record.fieldName === field.name && record.date.split('T')[0] === todayStr
+      // Calculate field stats based on actual attendance data
+      const fieldStats: FieldStats[] = (fields || []).map(field => {
+        const fieldStudents = (students || []).filter(student => student.field === field.name);
+        const fieldAbsentees = (absenteeRecords || []).filter(record => 
+          record.fieldName === field.name && 
+          new Date(record.date).toISOString().split('T')[0] === todayStr
         );
         
         const totalStudents = fieldStudents.length;
@@ -120,7 +133,7 @@ export default function Dashboard() {
         };
       });
 
-      // Calculate top absentee fields
+      // Calculate top absentee fields based on actual data
       const topAbsenteeFields: TopAbsenteeField[] = fieldStats
         .filter(field => field.totalStudents > 0)
         .map(field => ({
@@ -133,8 +146,8 @@ export default function Dashboard() {
         .slice(0, 5);
 
       const dashboardStats: DashboardStats = {
-        totalStudents: students.length,
-        totalFields: fields.length,
+        totalStudents: (students || []).length,
+        totalFields: (fields || []).length,
         todayAbsentees,
         weeklyAbsentees,
         monthlyAbsentees,
@@ -142,10 +155,10 @@ export default function Dashboard() {
         topAbsenteeFields
       };
 
-      console.log('Generated dashboard stats:', dashboardStats);
+      console.log('Generated dashboard stats from database:', dashboardStats);
       return dashboardStats;
     } catch (error) {
-      console.error('Failed to generate stats from local data:', error);
+      console.error('Failed to generate stats from database:', error);
       // Return default stats
       return {
         totalStudents: 0,
@@ -369,7 +382,12 @@ export default function Dashboard() {
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center">
             <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
-            <p className="text-yellow-800">{error}</p>
+            <div>
+              <p className="text-yellow-800 font-medium">{error}</p>
+              <p className="text-yellow-700 text-sm mt-1">
+                Click refresh to get the latest data from the database.
+              </p>
+            </div>
           </div>
         </div>
       )}
