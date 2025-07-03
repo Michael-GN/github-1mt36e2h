@@ -46,6 +46,19 @@ export class APIService {
     }
   }
 
+  // Helper function to format datetime for MySQL
+  private static formatDateTimeForMySQL(dateString: string): string {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
   // Enhanced session generation from timetable
   static async getCurrentSessions() {
     try {
@@ -124,14 +137,23 @@ export class APIService {
     return hours * 60 + minutes;
   }
 
-  // Direct attendance submission to database
+  // Direct attendance submission to database with proper datetime formatting
   static async submitAttendance(attendanceData: any) {
     try {
       console.log('Submitting attendance directly to database:', attendanceData);
       
+      // Format the timestamp for MySQL
+      const formattedData = {
+        ...attendanceData,
+        timestamp: this.formatDateTimeForMySQL(attendanceData.timestamp),
+        date: attendanceData.date ? attendanceData.date.split('T')[0] : new Date().toISOString().split('T')[0] // Ensure date is in YYYY-MM-DD format
+      };
+      
+      console.log('Formatted attendance data for MySQL:', formattedData);
+      
       const response = await this.fetchWithTimeout(`${API_BASE_URL}/submit_attendance.php`, {
         method: 'POST',
-        body: JSON.stringify(attendanceData),
+        body: JSON.stringify(formattedData),
       });
       
       const result = await this.handleResponse(response);
