@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Clock, User, AlertTriangle, Calendar, BookOpen, Search, X, RefreshCw } from 'lucide-react';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
-import type { Student } from '../types';
+import type { Student, AbsenteeRecord } from '../types';
 
 interface StudentAbsenteeHours {
   studentId: string;
@@ -45,14 +45,15 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       
       console.log('Loading student absentee hours from database...');
       
-      // Get absentee data from the database
-      let absenteeData = [];
+      // Get absentee data from the database with proper typing
+      let absenteeData: AbsenteeRecord[] = [];
       try {
-        absenteeData = await APIService.getAbsenteeReport({
-          report_type: 'monthly', // Get all records from this month
+        const apiResponse = await APIService.getAbsenteeReport({
+          report_type: 'monthly',
           date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
           date_to: new Date().toISOString().split('T')[0]
         });
+        absenteeData = Array.isArray(apiResponse) ? apiResponse : [];
         console.log('Absentee data from database:', absenteeData);
       } catch (apiError) {
         console.log('Failed to fetch from API, will show all students with zero hours');
@@ -62,17 +63,17 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       // Process the data to calculate hours for each student
       const hoursData: StudentAbsenteeHours[] = students.map(student => {
         // Find all absentee records for this student
-        const studentAbsences = absenteeData.filter((record: any) => 
+        const studentAbsences = absenteeData.filter((record: AbsenteeRecord) => 
           record.studentName === student.name || 
           record.matricule === student.matricule
         );
 
         // Calculate total hours and sessions
-        const absentSessions = studentAbsences.map((absence: any) => ({
+        const absentSessions = studentAbsences.map((absence: AbsenteeRecord) => ({
           date: absence.date,
           course: absence.courseTitle,
           courseCode: absence.courseCode,
-          duration: calculateSessionDuration(absence.timeSlot || '2 hours'), // Default if no time slot
+          duration: calculateSessionDuration(absence.timeSlot || '2 hours'),
           timeSlot: absence.timeSlot || 'Unknown time'
         }));
 

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Users, BookOpen, AlertTriangle, TrendingUp, Calendar, ClipboardList, FileText, ArrowRight, CheckCircle, RefreshCw } from 'lucide-react';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
-import type { DashboardStats, FieldStats, TopAbsenteeField } from '../types';
+import type { DashboardStats, FieldStats, TopAbsenteeField, AbsenteeRecord, Student, Field } from '../types';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -40,7 +40,7 @@ export default function Dashboard() {
       
       console.log('Loading dashboard stats from database...');
       
-      let dashboardData;
+      let dashboardData: DashboardStats;
       try {
         // Try to get real-time data from database
         dashboardData = await APIService.getDashboardStats();
@@ -72,25 +72,25 @@ export default function Dashboard() {
     }
   };
 
-  const generateStatsFromDatabase = async () => {
+  const generateStatsFromDatabase = async (): Promise<DashboardStats> => {
     try {
       console.log('Generating stats from database records...');
       
-      // Get data from database APIs
-      const [students, fields, absenteeRecords] = await Promise.all([
-        APIService.getStudents(),
-        APIService.getFields(),
+      // Get data from database APIs with proper typing
+      const [students, fields, absenteeRecords]: [Student[], Field[], AbsenteeRecord[]] = await Promise.all([
+        APIService.getStudents().then((data: Student[]) => Array.isArray(data) ? data : []),
+        APIService.getFields().then((data: Field[]) => Array.isArray(data) ? data : []),
         APIService.getAbsenteeReport({
-          report_type: 'monthly', // Get all records from this month
+          report_type: 'monthly',
           date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
           date_to: new Date().toISOString().split('T')[0]
-        })
+        }).then((data: AbsenteeRecord[]) => Array.isArray(data) ? data : [])
       ]);
       
       console.log('Database data:', { 
-        students: students?.length || 0, 
-        fields: fields?.length || 0, 
-        absentees: absenteeRecords?.length || 0 
+        students: students.length, 
+        fields: fields.length, 
+        absentees: absenteeRecords.length 
       });
 
       const today = new Date();
@@ -99,21 +99,21 @@ export default function Dashboard() {
       const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
       // Calculate absentees by time period from database records
-      const todayAbsentees = (absenteeRecords || []).filter(record => {
+      const todayAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => {
         const recordDate = new Date(record.date).toISOString().split('T')[0];
         return recordDate === todayStr;
       }).length;
 
-      const weeklyAbsentees = (absenteeRecords || []).filter(record => 
+      const weeklyAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => 
         new Date(record.date) >= weekAgo
       ).length;
 
-      const monthlyAbsentees = (absenteeRecords || []).length;
+      const monthlyAbsentees = absenteeRecords.length;
 
       // Calculate field stats based on actual attendance data
-      const fieldStats: FieldStats[] = (fields || []).map(field => {
-        const fieldStudents = (students || []).filter(student => student.field === field.name);
-        const fieldAbsentees = (absenteeRecords || []).filter(record => 
+      const fieldStats: FieldStats[] = fields.map((field: Field) => {
+        const fieldStudents = students.filter((student: Student) => student.field === field.name);
+        const fieldAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => 
           record.fieldName === field.name && 
           new Date(record.date).toISOString().split('T')[0] === todayStr
         );
@@ -135,8 +135,8 @@ export default function Dashboard() {
 
       // Calculate top absentee fields based on actual data
       const topAbsenteeFields: TopAbsenteeField[] = fieldStats
-        .filter(field => field.totalStudents > 0)
-        .map(field => ({
+        .filter((field: FieldStats) => field.totalStudents > 0)
+        .map((field: FieldStats) => ({
           fieldName: field.fieldName,
           absenteeCount: field.absentToday,
           totalStudents: field.totalStudents,
@@ -146,8 +146,8 @@ export default function Dashboard() {
         .slice(0, 5);
 
       const dashboardStats: DashboardStats = {
-        totalStudents: (students || []).length,
-        totalFields: (fields || []).length,
+        totalStudents: students.length,
+        totalFields: fields.length,
         todayAbsentees,
         weeklyAbsentees,
         monthlyAbsentees,
@@ -229,17 +229,17 @@ export default function Dashboard() {
 
   // Chart data for field performance
   const fieldPerformanceData = {
-    labels: stats.fieldStats.map(field => field.fieldName),
+    labels: stats.fieldStats.map((field: FieldStats) => field.fieldName),
     datasets: [
       {
         label: 'Attendance Rate (%)',
-        data: stats.fieldStats.map(field => field.attendanceRate),
-        backgroundColor: stats.fieldStats.map(field => 
+        data: stats.fieldStats.map((field: FieldStats) => field.attendanceRate),
+        backgroundColor: stats.fieldStats.map((field: FieldStats) => 
           field.attendanceRate >= 95 ? '#10B981' :
           field.attendanceRate >= 90 ? '#3B82F6' :
           field.attendanceRate >= 85 ? '#F59E0B' : '#EF4444'
         ),
-        borderColor: stats.fieldStats.map(field => 
+        borderColor: stats.fieldStats.map((field: FieldStats) => 
           field.attendanceRate >= 95 ? '#059669' :
           field.attendanceRate >= 90 ? '#2563EB' :
           field.attendanceRate >= 85 ? '#D97706' : '#DC2626'
@@ -313,7 +313,7 @@ export default function Dashboard() {
     datasets: [
       {
         data: [
-          stats.fieldStats.reduce((sum, field) => sum + field.presentToday, 0),
+          stats.fieldStats.reduce((sum: number, field: FieldStats) => sum + field.presentToday, 0),
           stats.todayAbsentees
         ],
         backgroundColor: ['#10B981', '#EF4444'],
@@ -534,7 +534,7 @@ export default function Dashboard() {
         <div className="p-6">
           <div className="space-y-4">
             {stats.topAbsenteeFields.length > 0 ? (
-              stats.topAbsenteeFields.map((field, index) => (
+              stats.topAbsenteeFields.map((field: TopAbsenteeField, index: number) => (
                 <div key={field.fieldName} className="flex items-center space-x-4 p-4 bg-red-50 dark:bg-red-900 rounded-lg">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
                     index === 0 ? 'bg-red-500 text-white' :
