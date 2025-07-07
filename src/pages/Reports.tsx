@@ -48,8 +48,8 @@ export default function Reports() {
   useEffect(() => {
     // Update available options when data changes
     if (allAbsentees.length > 0) {
-      const fields = [...new Set(allAbsentees.map(record => record.fieldName))];
-      const courses = [...new Set(allAbsentees.map(record => record.courseTitle))];
+      const fields = [...new Set(allAbsentees.map((record: AbsenteeRecord) => record.fieldName))];
+      const courses = [...new Set(allAbsentees.map((record: AbsenteeRecord) => record.courseTitle))];
       setAvailableFields(fields);
       setAvailableCourses(courses);
     }
@@ -78,7 +78,8 @@ export default function Reports() {
         };
 
         console.log('Fetching from API with params:', filterParams);
-        reportData = await APIService.getAbsenteeReport(filterParams);
+        const apiResponse = await APIService.getAbsenteeReport(filterParams);
+        reportData = Array.isArray(apiResponse) ? apiResponse : [];
         console.log('API report data received:', reportData);
         
         if (reportData && reportData.length > 0) {
@@ -95,72 +96,75 @@ export default function Reports() {
       }
 
       // Store all data for filtering
-      setAllAbsentees(reportData || []);
+      setAllAbsentees(reportData);
 
       // Apply client-side filters
-      let filteredData = [...(reportData || [])];
+      let filteredData = [...reportData];
 
-      // Apply date filters
-      if (filters.reportType === 'custom' || filters.dateFrom || filters.dateTo) {
-        const fromDate = new Date(filters.dateFrom);
-        const toDate = new Date(filters.dateTo);
-        toDate.setHours(23, 59, 59, 999); // Include the entire end date
+      // Apply date filters based on report type
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+      
+      switch (filters.reportType) {
+        case 'daily':
+          filteredData = filteredData.filter((record: AbsenteeRecord) => {
+            const recordDate = new Date(record.date).toISOString().split('T')[0];
+            return recordDate === todayStr;
+          });
+          break;
+        case 'weekly':
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay());
+          startOfWeek.setHours(0, 0, 0, 0);
+          filteredData = filteredData.filter((record: AbsenteeRecord) => 
+            new Date(record.date) >= startOfWeek
+          );
+          break;
+        case 'monthly':
+          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+          filteredData = filteredData.filter((record: AbsenteeRecord) => 
+            new Date(record.date) >= startOfMonth
+          );
+          break;
+        case 'custom':
+          if (filters.dateFrom && filters.dateTo) {
+            const fromDate = new Date(filters.dateFrom);
+            const toDate = new Date(filters.dateTo);
+            toDate.setHours(23, 59, 59, 999); // Include the entire end date
 
-        filteredData = filteredData.filter(record => {
-          const recordDate = new Date(record.date);
-          return recordDate >= fromDate && recordDate <= toDate;
-        });
-      } else {
-        // Apply report type filters
-        const today = new Date();
-        const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay()));
-        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-
-        switch (filters.reportType) {
-          case 'daily':
-            const todayStr = new Date().toISOString().split('T')[0];
-            filteredData = filteredData.filter(record => 
-              record.date.split('T')[0] === todayStr
-            );
-            break;
-          case 'weekly':
-            filteredData = filteredData.filter(record => 
-              new Date(record.date) >= startOfWeek
-            );
-            break;
-          case 'monthly':
-            filteredData = filteredData.filter(record => 
-              new Date(record.date) >= startOfMonth
-            );
-            break;
-        }
+            filteredData = filteredData.filter((record: AbsenteeRecord) => {
+              const recordDate = new Date(record.date);
+              return recordDate >= fromDate && recordDate <= toDate;
+            });
+          }
+          break;
       }
 
       // Apply other filters
       if (filters.fieldName) {
-        filteredData = filteredData.filter(record => 
+        filteredData = filteredData.filter((record: AbsenteeRecord) => 
           record.fieldName.toLowerCase().includes(filters.fieldName.toLowerCase())
         );
       }
 
       if (filters.level) {
-        filteredData = filteredData.filter(record => record.level === filters.level);
+        filteredData = filteredData.filter((record: AbsenteeRecord) => record.level === filters.level);
       }
 
       if (filters.courseTitle) {
-        filteredData = filteredData.filter(record => 
+        filteredData = filteredData.filter((record: AbsenteeRecord) => 
           record.courseTitle.toLowerCase().includes(filters.courseTitle.toLowerCase())
         );
       }
 
       if (filters.studentName) {
-        filteredData = filteredData.filter(record => 
+        filteredData = filteredData.filter((record: AbsenteeRecord) => 
           record.studentName.toLowerCase().includes(filters.studentName.toLowerCase())
         );
       }
 
       if (filters.matricule) {
-        filteredData = filteredData.filter(record => 
+        filteredData = filteredData.filter((record: AbsenteeRecord) => 
           record.matricule.toLowerCase().includes(filters.matricule.toLowerCase())
         );
       }
@@ -223,7 +227,7 @@ export default function Reports() {
   const exportReport = () => {
     const csvContent = [
       ['Student Name', 'Matricule', 'Field', 'Level', 'Course', 'Parent Name', 'Parent Phone', 'Date'].join(','),
-      ...absentees.map(record => [
+      ...absentees.map((record: AbsenteeRecord) => [
         record.studentName,
         record.matricule,
         record.fieldName,
@@ -276,14 +280,14 @@ export default function Reports() {
 
   // Group absentees by field for better organization
   const getGroupedAbsentees = () => {
-    const grouped = absentees.reduce((acc, record) => {
+    const grouped = absentees.reduce((acc: Record<string, AbsenteeRecord[]>, record: AbsenteeRecord) => {
       const key = record.fieldName;
       if (!acc[key]) {
         acc[key] = [];
       }
       acc[key].push(record);
       return acc;
-    }, {} as Record<string, AbsenteeRecord[]>);
+    }, {});
 
     return Object.entries(grouped).map(([fieldName, records]) => ({
       fieldName,
@@ -418,7 +422,7 @@ export default function Reports() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fields Affected</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {[...new Set(absentees.map(a => a.fieldName))].length}
+                  {[...new Set(absentees.map((a: AbsenteeRecord) => a.fieldName))].length}
                 </p>
               </div>
             </div>
@@ -432,7 +436,7 @@ export default function Reports() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Courses Affected</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {[...new Set(absentees.map(a => a.courseTitle))].length}
+                  {[...new Set(absentees.map((a: AbsenteeRecord) => a.courseTitle))].length}
                 </p>
               </div>
             </div>
@@ -446,7 +450,7 @@ export default function Reports() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Parents to Contact</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {[...new Set(absentees.map(a => a.parentPhone))].length}
+                  {[...new Set(absentees.map((a: AbsenteeRecord) => a.parentPhone))].length}
                 </p>
               </div>
             </div>
@@ -515,7 +519,7 @@ export default function Reports() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">All Fields</option>
-                    {availableFields.map(field => (
+                    {availableFields.map((field: string) => (
                       <option key={field} value={field}>
                         {field}
                       </option>
@@ -535,7 +539,7 @@ export default function Reports() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">All Levels</option>
-                    {availableLevels.map(level => (
+                    {availableLevels.map((level: string) => (
                       <option key={level} value={level}>
                         {level}
                       </option>
@@ -555,7 +559,7 @@ export default function Reports() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">All Courses</option>
-                    {availableCourses.map(course => (
+                    {availableCourses.map((course: string) => (
                       <option key={course} value={course}>
                         {course}
                       </option>
@@ -648,7 +652,7 @@ export default function Reports() {
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    {records.map((record) => (
+                    {records.map((record: AbsenteeRecord) => (
                       <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>

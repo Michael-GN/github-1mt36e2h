@@ -38,6 +38,7 @@ export interface TimeSlot {
   room: string;
   fieldId: string;
   level: string;
+  timeSlot?: string;
 }
 
 export interface Session {
@@ -67,6 +68,7 @@ export interface AbsenteeRecord {
   parentEmail?: string;
   date: string;
   sessionId: string;
+  timeSlot?: string;
 }
 
 export interface AttendanceRecord {
