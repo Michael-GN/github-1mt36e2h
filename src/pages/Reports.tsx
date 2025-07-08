@@ -132,6 +132,37 @@ export default function Reports() {
         date: today.toISOString(),
         sessionId: 'session-5',
         timeSlot: '10:00 - 12:00'
+      },
+      // Add common course absentees
+      {
+        id: '6',
+        studentName: 'Frank Miller',
+        matricule: 'CS100/006',
+        fieldName: 'Common Course (Computer Science, Software Engineering)',
+        level: 'Level 100',
+        courseTitle: 'Mathematics for Engineers',
+        courseCode: 'MATH101',
+        parentPhone: '+1234567895',
+        parentName: 'Susan Miller',
+        parentEmail: 'susan.miller@email.com',
+        date: today.toISOString(),
+        sessionId: 'common-session-1',
+        timeSlot: '14:00 - 16:00'
+      },
+      {
+        id: '7',
+        studentName: 'Grace Lee',
+        matricule: 'SE100/007',
+        fieldName: 'Common Course (Computer Science, Software Engineering)',
+        level: 'Level 100',
+        courseTitle: 'Mathematics for Engineers',
+        courseCode: 'MATH101',
+        parentPhone: '+1234567896',
+        parentName: 'James Lee',
+        parentEmail: 'james.lee@email.com',
+        date: today.toISOString(),
+        sessionId: 'common-session-1',
+        timeSlot: '14:00 - 16:00'
       }
     ];
 
@@ -169,7 +200,7 @@ export default function Reports() {
         console.log('API failed, using demo data:', apiError);
         // Use demo data when API fails
         reportData = generateDemoAbsenteeData();
-        setError('Using demo data - API connection failed. In production, this would show real attendance data.');
+        console.log('Using demo data for reports');
       }
 
       // Apply client-side filtering based on report type

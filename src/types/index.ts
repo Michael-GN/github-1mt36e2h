@@ -53,6 +53,9 @@ export interface Session {
   day: string;
   lecturer: string;
   students: Student[];
+  isCommonCourse?: boolean;
+  participatingFields?: string[];
+  participatingLevels?: string[];
 }
 
 export interface AbsenteeRecord {
@@ -116,11 +119,17 @@ export interface TimetableEntry {
   id: string;
   day: string;
   timeSlot: string;
+  time_slot?: string; // Alternative format from database
   course: string;
   field: string;
   level: string;
   room: string;
   lecturer: string;
+  isCommon?: boolean;
+  fields?: string[];
+  levels?: string[];
+  displayField?: string;
+  displayLevel?: string;
 }
 
 export interface AdminUser {
