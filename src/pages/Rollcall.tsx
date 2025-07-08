@@ -648,7 +648,14 @@ IME Discipline Master`;
                     <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
                       <div className="flex items-center space-x-2">
                         <Users className="w-4 h-4" />
-                        <span>{session.fieldName} - {session.level}</span>
+                        <span>
+                          {session.fieldName} - {session.level}
+                          {session.isCommonCourse && (
+                            <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full dark:bg-green-900 dark:text-green-200">
+                              Common Course
+                            </span>
+                          )}
+                        </span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <Clock className="w-4 h-4" />
@@ -658,6 +665,11 @@ IME Discipline Master`;
                         <MapPin className="w-4 h-4" />
                         <span>{session.room}</span>
                       </div>
+                      {session.isCommonCourse && (
+                        <div className="text-xs text-green-600 dark:text-green-400 mt-2">
+                          Participating Fields: {session.participatingFields?.join(', ')}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -694,9 +706,19 @@ IME Discipline Master`;
               <div>
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">
                   {selectedSession.courseTitle} ({selectedSession.courseCode})
+                  {selectedSession.isCommonCourse && (
+                    <span className="ml-3 px-3 py-1 bg-green-100 text-green-800 text-sm rounded-full dark:bg-green-900 dark:text-green-200">
+                      Common Course
+                    </span>
+                  )}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400">
                   {selectedSession.fieldName} - {selectedSession.level} • {selectedSession.room}
+                  {selectedSession.isCommonCourse && (
+                    <span className="block text-sm text-green-600 dark:text-green-400 mt-1">
+                      Fields: {selectedSession.participatingFields?.join(', ')} | Levels: {selectedSession.participatingLevels?.join(', ')}
+                    </span>
+                  )}
                 </p>
               </div>
               <button
