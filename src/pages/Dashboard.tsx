@@ -265,7 +265,7 @@ export default function Dashboard() {
           size: 16,
           weight: 'bold' as const,
         },
-        color: '#1F2937',
+        color: document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#1F2937',
       },
       tooltip: {
         backgroundColor: '#1F2937',
@@ -286,10 +286,10 @@ export default function Dashboard() {
         beginAtZero: true,
         max: 100,
         grid: {
-          color: '#E5E7EB',
+          color: document.documentElement.classList.contains('dark') ? '#374151' : '#E5E7EB',
         },
         ticks: {
-          color: '#6B7280',
+          color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#6B7280',
           callback: function(value: any) {
             return value + '%';
           },
@@ -300,7 +300,7 @@ export default function Dashboard() {
           display: false,
         },
         ticks: {
-          color: '#6B7280',
+          color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#6B7280',
           maxRotation: 45,
         },
       },
@@ -337,7 +337,7 @@ export default function Dashboard() {
           font: {
             size: 14,
           },
-          color: '#1F2937',
+          color: document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#1F2937',
         },
       },
       tooltip: {
