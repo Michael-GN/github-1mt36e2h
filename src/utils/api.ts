@@ -117,7 +117,7 @@ export class APIService {
       const sessions = Array.from(commonCourseGroups.values())
         .filter((entry: any) => entry.day === currentDay)
         .map((entry: any) => {
-          const [startTime, endTime] = entry.time_slot.split(' - ');
+          const [startTime, endTime] = (entry.time_slot || entry.timeSlot).split(' - ');
           const startMinutes = this.timeToMinutes(startTime);
           const endMinutes = this.timeToMinutes(endTime);
 
@@ -138,7 +138,7 @@ export class APIService {
             : entry.fields[0];
 
           return {
-            id: `${entry.fields.join('-')}-${entry.levels.join('-')}-${entry.day}-${entry.time_slot}`.replace(/\s+/g, '-'),
+            id: `${entry.fields.join('-')}-${entry.levels.join('-')}-${entry.day}-${(entry.time_slot || entry.timeSlot)}`.replace(/\s+/g, '-'),
             courseTitle: entry.course,
             courseCode: entry.course.split(' ').map((word: string) => word.charAt(0)).join('').toUpperCase(),
             fieldName: displayName,
@@ -372,7 +372,7 @@ export class APIService {
         {
           id: '1',
           day: 'Monday',
-          time_slot: '08:00 - 10:00',
+          timeSlot: '08:00 - 10:00',
           course: 'Database Systems',
           field: 'Computer Science',
           level: 'Level 200',
@@ -382,7 +382,7 @@ export class APIService {
         {
           id: '2',
           day: 'Monday',
-          time_slot: '10:00 - 12:00',
+          timeSlot: '10:00 - 12:00',
           course: 'Programming Fundamentals',
           field: 'Computer Science',
           level: 'Level 100',
@@ -392,7 +392,7 @@ export class APIService {
         {
           id: '3',
           day: 'Tuesday',
-          time_slot: '08:00 - 10:00',
+          timeSlot: '08:00 - 10:00',
           course: 'Software Engineering Principles',
           field: 'Software Engineering',
           level: 'Level 200',
@@ -402,7 +402,7 @@ export class APIService {
         {
           id: '4',
           day: 'Tuesday',
-          time_slot: '14:00 - 16:00',
+          timeSlot: '14:00 - 16:00',
           course: 'Web Development Basics',
           field: 'Information Technology',
           level: 'Level 100',
@@ -412,7 +412,7 @@ export class APIService {
         {
           id: '5',
           day: 'Wednesday',
-          time_slot: '10:00 - 12:00',
+          timeSlot: '10:00 - 12:00',
           course: 'Network Fundamentals',
           field: 'Cybersecurity',
           level: 'Level 200',
@@ -423,7 +423,7 @@ export class APIService {
         {
           id: '6',
           day: 'Wednesday',
-          time_slot: '14:00 - 16:00',
+          timeSlot: '14:00 - 16:00',
           course: 'Mathematics for Engineers',
           field: 'Computer Science',
           level: 'Level 100',
@@ -433,7 +433,7 @@ export class APIService {
         {
           id: '7',
           day: 'Wednesday',
-          time_slot: '14:00 - 16:00',
+          timeSlot: '14:00 - 16:00',
           course: 'Mathematics for Engineers',
           field: 'Software Engineering',
           level: 'Level 100',

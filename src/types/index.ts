@@ -119,7 +119,6 @@ export interface TimetableEntry {
   id: string;
   day: string;
   timeSlot: string;
-  time_slot?: string; // Alternative format from database
   course: string;
   field: string;
   level: string;

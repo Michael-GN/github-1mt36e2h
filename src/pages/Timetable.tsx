@@ -220,7 +220,7 @@ export default function Timetable() {
     try {
       const entryData = {
         day: formData.day,
-        time_slot: formData.timeSlot,
+        timeSlot: formData.timeSlot,
         course: formData.course,
         field: formData.field,
         level: formData.level,
@@ -234,7 +234,7 @@ export default function Timetable() {
           entry.id === editingEntry.id ? entryData : entry
         ));
       } else {
-        setTimetable(prev => [...prev, entryData]);
+        setTimetable(prev => [...prev, entryData as TimetableEntry]);
       }
 
       try {
@@ -304,7 +304,7 @@ export default function Timetable() {
   const getEntriesForSlot = (day: string, timeSlot: string) => {
     const entries = timetable.filter(entry => 
       entry.day === day && 
-      (entry.timeSlot || entry.time_slot) === timeSlot && 
+      entry.timeSlot === timeSlot && 
       entry.field === selectedField
     );
     
@@ -696,7 +696,7 @@ export default function Timetable() {
       )}
 
       {/* Print Styles */}
-      <style jsx>{`
+      <style>{`
         @media print {
           body * {
             visibility: hidden;
