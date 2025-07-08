@@ -185,10 +185,18 @@ export class APIService {
       
       const data = await this.handleResponse(response);
       console.log('Absentee report data:', data);
-      return data || [];
+      
+      // If no data from API, return empty array but don't throw error
+      if (!data || !Array.isArray(data) || data.length === 0) {
+        console.log('No absentee data found in API response');
+        return [];
+      }
+      
+      return data;
     } catch (error) {
       console.error('Failed to fetch absentee report:', error);
-      throw error;
+      // Don't throw error, return empty array to allow fallback handling
+      return [];
     }
   }
 

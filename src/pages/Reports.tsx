@@ -82,98 +82,61 @@ export default function Reports() {
         reportData = Array.isArray(apiResponse) ? apiResponse : [];
         console.log('API report data received:', reportData);
         
-        if (reportData && reportData.length > 0) {
-          console.log('Successfully loaded', reportData.length, 'records from API');
-        } else {
-          console.log('No data returned from API, checking for empty result vs error');
+        // If no data from API, try to get all attendance data and filter locally
+        if (!reportData || reportData.length === 0) {
+          console.log('No data from API, trying to get all attendance data...');
+          
+          // Try to get broader data range
+          const broadFilterParams = {
+            report_type: 'monthly',
+            date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+            date_to: new Date().toISOString().split('T')[0]
+          };
+          
+          const broadResponse = await APIService.getAbsenteeReport(broadFilterParams);
+          const allData = Array.isArray(broadResponse) ? broadResponse : [];
+          console.log('Broader API response:', allData);
+          
+          if (allData.length > 0) {
+            // Apply client-side filtering to the broader dataset
+            reportData = allData.filter((record: AbsenteeRecord) => {
+              const recordDate = new Date(record.date);
+              const fromDate = new Date(filters.dateFrom);
+              const toDate = new Date(filters.dateTo);
+              toDate.setHours(23, 59, 59, 999);
+              
+              // Check date range
+              const inDateRange = recordDate >= fromDate && recordDate <= toDate;
+              
+              // Apply other filters
+              const matchesField = !filters.fieldName || record.fieldName.toLowerCase().includes(filters.fieldName.toLowerCase());
+              const matchesLevel = !filters.level || record.level === filters.level;
+              const matchesCourse = !filters.courseTitle || record.courseTitle.toLowerCase().includes(filters.courseTitle.toLowerCase());
+              const matchesStudent = !filters.studentName || record.studentName.toLowerCase().includes(filters.studentName.toLowerCase());
+              const matchesMatricule = !filters.matricule || record.matricule.toLowerCase().includes(filters.matricule.toLowerCase());
+              
+              return inDateRange && matchesField && matchesLevel && matchesCourse && matchesStudent && matchesMatricule;
+            });
+            
+            console.log('Filtered data from broader dataset:', reportData);
+          }
         }
         
       } catch (apiError) {
         console.log('API failed, will not use fallback data for reports:', apiError);
         // For reports, we want to show that there's no data rather than showing stale local data
         reportData = [];
-        setError('Unable to fetch latest report data from database. Please check your connection and try again.');
+        setError('Unable to fetch report data from database. Please check your connection and try again.');
       }
 
       // Store all data for filtering
       setAllAbsentees(reportData);
 
-      // Apply client-side filters
-      let filteredData = [...reportData];
-
-      // Apply date filters based on report type
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
+      console.log('Final report data:', reportData);
+      setAbsentees(reportData);
       
-      switch (filters.reportType) {
-        case 'daily':
-          filteredData = filteredData.filter((record: AbsenteeRecord) => {
-            const recordDate = new Date(record.date).toISOString().split('T')[0];
-            return recordDate === todayStr;
-          });
-          break;
-        case 'weekly':
-          const startOfWeek = new Date(today);
-          startOfWeek.setDate(today.getDate() - today.getDay());
-          startOfWeek.setHours(0, 0, 0, 0);
-          filteredData = filteredData.filter((record: AbsenteeRecord) => 
-            new Date(record.date) >= startOfWeek
-          );
-          break;
-        case 'monthly':
-          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          filteredData = filteredData.filter((record: AbsenteeRecord) => 
-            new Date(record.date) >= startOfMonth
-          );
-          break;
-        case 'custom':
-          if (filters.dateFrom && filters.dateTo) {
-            const fromDate = new Date(filters.dateFrom);
-            const toDate = new Date(filters.dateTo);
-            toDate.setHours(23, 59, 59, 999); // Include the entire end date
-
-            filteredData = filteredData.filter((record: AbsenteeRecord) => {
-              const recordDate = new Date(record.date);
-              return recordDate >= fromDate && recordDate <= toDate;
-            });
-          }
-          break;
-      }
-
-      // Apply other filters
-      if (filters.fieldName) {
-        filteredData = filteredData.filter((record: AbsenteeRecord) => 
-          record.fieldName.toLowerCase().includes(filters.fieldName.toLowerCase())
-        );
-      }
-
-      if (filters.level) {
-        filteredData = filteredData.filter((record: AbsenteeRecord) => record.level === filters.level);
-      }
-
-      if (filters.courseTitle) {
-        filteredData = filteredData.filter((record: AbsenteeRecord) => 
-          record.courseTitle.toLowerCase().includes(filters.courseTitle.toLowerCase())
-        );
-      }
-
-      if (filters.studentName) {
-        filteredData = filteredData.filter((record: AbsenteeRecord) => 
-          record.studentName.toLowerCase().includes(filters.studentName.toLowerCase())
-        );
-      }
-
-      if (filters.matricule) {
-        filteredData = filteredData.filter((record: AbsenteeRecord) => 
-          record.matricule.toLowerCase().includes(filters.matricule.toLowerCase())
-        );
-      }
-
-      console.log('Final filtered data:', filteredData);
-      setAbsentees(filteredData);
-      
-      if (filteredData.length > 0) {
-        LocalDBService.cacheData('rollcall_cached_reports', filteredData);
+      if (reportData.length > 0) {
+        LocalDBService.cacheData('rollcall_cached_reports', reportData);
       }
 
     } catch (error) {
