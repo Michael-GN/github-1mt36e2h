@@ -158,14 +158,14 @@ IME Discipline Master`;
           console.log('Database submission result:', result);
           successCount++;
         } catch (error) {
-          console.error('Failed to submit record to database for student:', student.name, error);
+          console.error('Failed to submit attendance record to database for student:', student.name, error);
           failedCount++;
         }
       }
 
       if (successCount > 0) {
         setSuccessMessage(
-          `Attendance saved to database successfully for ${successCount} students!` +
+          `✅ Attendance saved to database successfully for ${successCount} students!` +
           (failedCount > 0 ? ` ${failedCount} records failed to save.` : '')
         );
 
@@ -208,13 +208,13 @@ IME Discipline Master`;
         setTimeout(() => setSuccessMessage(null), 5000);
 
       } else {
-        setError('Failed to save attendance records to database. Please try again.');
+        setError('❌ Failed to save attendance records to database. Please check your connection and try again.');
         return;
       }
 
     } catch (error) {
-      console.error('Failed to submit attendance to database:', error);
-      setError('Failed to save attendance to database. Please try again.');
+      console.error('Critical error submitting attendance to database:', error);
+      setError('❌ Critical error: Failed to save attendance to database. Please check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
