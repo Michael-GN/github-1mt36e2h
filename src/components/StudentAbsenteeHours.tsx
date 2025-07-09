@@ -194,7 +194,7 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
         </div>
         <p className="text-red-600 text-sm mb-4">{error}</p>
         <button
-          onClick={loadAbsenteeHours}
+          onClick={loadDetailedAbsenteeHours}
           className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
         >
           Try Again
