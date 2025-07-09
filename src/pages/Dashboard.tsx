@@ -42,31 +42,23 @@ export default function Dashboard() {
       
       let dashboardData: DashboardStats;
       try {
-        // Try to get real-time data from database
+        // Get real-time data from database (this should be the primary source)
         dashboardData = await APIService.getDashboardStats();
         console.log('Dashboard data from API:', dashboardData);
         
         if (!dashboardData) {
-          console.log('No data from API, generating from database records...');
+          console.log('No data from dashboard API, this indicates a database connection issue');
           dashboardData = await generateStatsFromDatabase();
         }
       } catch (apiError) {
-        console.log('API failed, generating stats from database records...');
+        console.log('Dashboard API failed, database may be unavailable:', apiError);
         dashboardData = await generateStatsFromDatabase();
       }
       
       setStats(dashboardData);
-      LocalDBService.cacheData('rollcall_cached_dashboard', dashboardData);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);
-      setError('Failed to load dashboard statistics. Please try refreshing.');
-      
-      // Try to load from cache as last resort
-      const cachedData = LocalDBService.getCachedData('rollcall_cached_dashboard');
-      if (cachedData) {
-        setStats(cachedData);
-        setError('Showing cached data. Click refresh for latest statistics.');
-      }
+      setError('Failed to load dashboard statistics from database. Please check your connection and try refreshing.');
     } finally {
       setLoading(false);
     }
@@ -76,87 +68,20 @@ export default function Dashboard() {
     try {
       console.log('Generating stats from database records...');
       
-      // Get data from database APIs with proper typing
-      const [students, fields, absenteeRecords]: [Student[], Field[], AbsenteeRecord[]] = await Promise.all([
-        APIService.getStudents().then((data: Student[]) => Array.isArray(data) ? data : []),
-        APIService.getFields().then((data: Field[]) => Array.isArray(data) ? data : []),
-        APIService.getAbsenteeReport({
-          report_type: 'monthly',
-          date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-          date_to: new Date().toISOString().split('T')[0]
-        }).then((data: AbsenteeRecord[]) => Array.isArray(data) ? data : [])
-      ]);
+      // This should only be called if the main API fails
+      // In production, dashboard stats should come directly from the database
+      console.warn('Dashboard API failed, this should not happen in production');
       
-      console.log('Database data:', { 
-        students: students.length, 
-        fields: fields.length, 
-        absentees: absenteeRecords.length 
-      });
-
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      // Calculate absentees by time period from database records
-      const todayAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => {
-        const recordDate = new Date(record.date).toISOString().split('T')[0];
-        return recordDate === todayStr;
-      }).length;
-
-      const weeklyAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => 
-        new Date(record.date) >= weekAgo
-      ).length;
-
-      const monthlyAbsentees = absenteeRecords.length;
-
-      // Calculate field stats based on actual attendance data
-      const fieldStats: FieldStats[] = fields.map((field: Field) => {
-        const fieldStudents = students.filter((student: Student) => student.field === field.name);
-        const fieldAbsentees = absenteeRecords.filter((record: AbsenteeRecord) => 
-          record.fieldName === field.name && 
-          new Date(record.date).toISOString().split('T')[0] === todayStr
-        );
-        
-        const totalStudents = fieldStudents.length;
-        const absentToday = fieldAbsentees.length;
-        const presentToday = Math.max(0, totalStudents - absentToday);
-        const attendanceRate = totalStudents > 0 ? ((presentToday / totalStudents) * 100) : 100;
-
-        return {
-          fieldId: field.id,
-          fieldName: field.name,
-          totalStudents,
-          presentToday,
-          absentToday,
-          attendanceRate: Math.round(attendanceRate * 100) / 100
-        };
-      });
-
-      // Calculate top absentee fields based on actual data
-      const topAbsenteeFields: TopAbsenteeField[] = fieldStats
-        .filter((field: FieldStats) => field.totalStudents > 0)
-        .map((field: FieldStats) => ({
-          fieldName: field.fieldName,
-          absenteeCount: field.absentToday,
-          totalStudents: field.totalStudents,
-          absenteeRate: field.totalStudents > 0 ? (field.absentToday / field.totalStudents) * 100 : 0
-        }))
-        .sort((a, b) => b.absenteeRate - a.absenteeRate)
-        .slice(0, 5);
-
-      const dashboardStats: DashboardStats = {
-        totalStudents: students.length,
-        totalFields: fields.length,
-        todayAbsentees,
-        weeklyAbsentees,
-        monthlyAbsentees,
-        fieldStats,
-        topAbsenteeFields
+      // Return empty stats if database is unavailable
+      return {
+        totalStudents: 0,
+        totalFields: 0,
+        todayAbsentees: 0,
+        weeklyAbsentees: 0,
+        monthlyAbsentees: 0,
+        fieldStats: [],
+        topAbsenteeFields: []
       };
-
-      console.log('Generated dashboard stats from database:', dashboardStats);
-      return dashboardStats;
     } catch (error) {
       console.error('Failed to generate stats from database:', error);
       // Return default stats

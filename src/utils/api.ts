@@ -218,105 +218,16 @@ export class APIService {
       const data = await this.handleResponse(response);
       console.log('Absentee report data:', data);
       
-      // If no data from API, generate some demo data for testing
-      if (!data || data.length === 0) {
-        console.log('No absentee data from API, generating demo data...');
-        return this.generateDemoAbsenteeData();
-      }
-      
-      return data;
+      // Return actual database data (empty array if no absentees)
+      return data || [];
     } catch (error) {
       console.error('Failed to fetch absentee report:', error);
-      // Return demo data instead of throwing error
-      console.log('API failed, returning demo absentee data...');
-      return this.generateDemoAbsenteeData();
+      // Return empty array if database is unavailable
+      console.log('Database unavailable, returning empty array');
+      return [];
     }
   }
 
-  // Generate demo absentee data for testing
-  private static generateDemoAbsenteeData() {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    
-    return [
-      {
-        id: '1',
-        studentName: 'Alice Johnson',
-        matricule: 'CS200/001',
-        fieldName: 'Computer Science',
-        level: 'Level 200',
-        courseTitle: 'Database Systems',
-        courseCode: 'CS201',
-        parentPhone: '+1234567890',
-        parentName: 'John Johnson',
-        parentEmail: 'john.johnson@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-1',
-        timeSlot: '08:00 - 10:00'
-      },
-      {
-        id: '2',
-        studentName: 'Bob Smith',
-        matricule: 'SE200/002',
-        fieldName: 'Software Engineering',
-        level: 'Level 200',
-        courseTitle: 'Software Architecture',
-        courseCode: 'SE201',
-        parentPhone: '+1234567891',
-        parentName: 'Mary Smith',
-        parentEmail: 'mary.smith@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-2',
-        timeSlot: '10:00 - 12:00'
-      },
-      {
-        id: '3',
-        studentName: 'Carol Davis',
-        matricule: 'IT100/003',
-        fieldName: 'Information Technology',
-        level: 'Level 100',
-        courseTitle: 'Web Development',
-        courseCode: 'IT101',
-        parentPhone: '+1234567892',
-        parentName: 'Robert Davis',
-        parentEmail: 'robert.davis@email.com',
-        date: yesterday.toISOString(),
-        sessionId: 'session-3',
-        timeSlot: '14:00 - 16:00'
-      },
-      {
-        id: '4',
-        studentName: 'David Wilson',
-        matricule: 'CYB200/004',
-        fieldName: 'Cybersecurity',
-        level: 'Level 200',
-        courseTitle: 'Network Security',
-        courseCode: 'CYB201',
-        parentPhone: '+1234567893',
-        parentName: 'Linda Wilson',
-        parentEmail: 'linda.wilson@email.com',
-        date: yesterday.toISOString(),
-        sessionId: 'session-4',
-        timeSlot: '08:00 - 10:00'
-      },
-      {
-        id: '5',
-        studentName: 'Emma Brown',
-        matricule: 'DS100/005',
-        fieldName: 'Data Science',
-        level: 'Level 100',
-        courseTitle: 'Statistics',
-        courseCode: 'DS101',
-        parentPhone: '+1234567894',
-        parentName: 'Michael Brown',
-        parentEmail: 'michael.brown@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-5',
-        timeSlot: '10:00 - 12:00'
-      }
-    ];
-  }
 
   // Get student absentee hours from database
   static async getStudentAbsenteeHours() {

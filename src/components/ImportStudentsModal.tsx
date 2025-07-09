@@ -93,9 +93,9 @@ export default function ImportStudentsModal({ onClose, onImport, availableFields
         }
 
         const headers = jsonData[0] as string[];
-        const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== ''));
+        const rows = jsonData.slice(1).filter((row: any) => row.some((cell: any) => cell !== null && cell !== ''));
 
-        const preview = rows.slice(0, 5).map((row: any) => {
+        const preview = rows.slice(0, 5).map((row: any[]) => {
           const obj: any = {};
           headers.forEach((header, index) => {
             obj[header] = row[index] || '';
@@ -197,9 +197,9 @@ export default function ImportStudentsModal({ onClose, onImport, availableFields
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         const headers = jsonData[0] as string[];
-        const rows = jsonData.slice(1).filter(row => row.some(cell => cell !== null && cell !== ''));
+        const rows = jsonData.slice(1).filter((row: any) => row.some((cell: any) => cell !== null && cell !== ''));
 
-        const students = rows.map((row: any, index) => {
+        const students = rows.map((row: any[], index: number) => {
           const student: any = {
             id: Date.now().toString() + index,
           };

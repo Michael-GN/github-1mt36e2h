@@ -40,7 +40,7 @@ export default function RollcallCard({ session }: RollcallCardProps) {
             {session.courseTitle}
           </h2>
           <p className="text-gray-600 dark:text-gray-400 font-medium">
-            {session.className}
+            {session.fieldName}
           </p>
         </div>
         <div className={`px-3 py-1 rounded-full text-xs font-medium ${

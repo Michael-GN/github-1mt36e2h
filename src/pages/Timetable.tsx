@@ -696,7 +696,8 @@ export default function Timetable() {
       )}
 
       {/* Print Styles */}
-      <style>{`
+      <style dangerouslySetInnerHTML={{
+        __html: `
         @media print {
           body * {
             visibility: hidden;
@@ -718,7 +719,8 @@ export default function Timetable() {
             width: 100%;
           }
         }
-      `}</style>
+        `
+      }} />
     </div>
   );
 }

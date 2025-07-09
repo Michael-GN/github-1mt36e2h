@@ -52,122 +52,7 @@ export default function Reports() {
     loadAbsenteeReport();
   }, [filters.reportType]);
 
-  const generateDemoAbsenteeData = (): AbsenteeRecord[] => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
-    
-    const demoData: AbsenteeRecord[] = [
-      {
-        id: '1',
-        studentName: 'Alice Johnson',
-        matricule: 'CS200/001',
-        fieldName: 'Computer Science',
-        level: 'Level 200',
-        courseTitle: 'Database Systems',
-        courseCode: 'CS201',
-        parentPhone: '+1234567890',
-        parentName: 'John Johnson',
-        parentEmail: 'john.johnson@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-1',
-        timeSlot: '08:00 - 10:00'
-      },
-      {
-        id: '2',
-        studentName: 'Bob Smith',
-        matricule: 'SE200/002',
-        fieldName: 'Software Engineering',
-        level: 'Level 200',
-        courseTitle: 'Software Architecture',
-        courseCode: 'SE201',
-        parentPhone: '+1234567891',
-        parentName: 'Mary Smith',
-        parentEmail: 'mary.smith@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-2',
-        timeSlot: '10:00 - 12:00'
-      },
-      {
-        id: '3',
-        studentName: 'Carol Davis',
-        matricule: 'IT100/003',
-        fieldName: 'Information Technology',
-        level: 'Level 100',
-        courseTitle: 'Web Development',
-        courseCode: 'IT101',
-        parentPhone: '+1234567892',
-        parentName: 'Robert Davis',
-        parentEmail: 'robert.davis@email.com',
-        date: yesterday.toISOString(),
-        sessionId: 'session-3',
-        timeSlot: '14:00 - 16:00'
-      },
-      {
-        id: '4',
-        studentName: 'David Wilson',
-        matricule: 'CYB200/004',
-        fieldName: 'Cybersecurity',
-        level: 'Level 200',
-        courseTitle: 'Network Security',
-        courseCode: 'CYB201',
-        parentPhone: '+1234567893',
-        parentName: 'Linda Wilson',
-        parentEmail: 'linda.wilson@email.com',
-        date: yesterday.toISOString(),
-        sessionId: 'session-4',
-        timeSlot: '08:00 - 10:00'
-      },
-      {
-        id: '5',
-        studentName: 'Emma Brown',
-        matricule: 'DS100/005',
-        fieldName: 'Data Science',
-        level: 'Level 100',
-        courseTitle: 'Statistics',
-        courseCode: 'DS101',
-        parentPhone: '+1234567894',
-        parentName: 'Michael Brown',
-        parentEmail: 'michael.brown@email.com',
-        date: today.toISOString(),
-        sessionId: 'session-5',
-        timeSlot: '10:00 - 12:00'
-      },
-      // Add common course absentees
-      {
-        id: '6',
-        studentName: 'Frank Miller',
-        matricule: 'CS100/006',
-        fieldName: 'Common Course (Computer Science, Software Engineering)',
-        level: 'Level 100',
-        courseTitle: 'Mathematics for Engineers',
-        courseCode: 'MATH101',
-        parentPhone: '+1234567895',
-        parentName: 'Susan Miller',
-        parentEmail: 'susan.miller@email.com',
-        date: today.toISOString(),
-        sessionId: 'common-session-1',
-        timeSlot: '14:00 - 16:00'
-      },
-      {
-        id: '7',
-        studentName: 'Grace Lee',
-        matricule: 'SE100/007',
-        fieldName: 'Common Course (Computer Science, Software Engineering)',
-        level: 'Level 100',
-        courseTitle: 'Mathematics for Engineers',
-        courseCode: 'MATH101',
-        parentPhone: '+1234567896',
-        parentName: 'James Lee',
-        parentEmail: 'james.lee@email.com',
-        date: today.toISOString(),
-        sessionId: 'common-session-1',
-        timeSlot: '14:00 - 16:00'
-      }
-    ];
 
-    return demoData;
-  };
 
   const loadAbsenteeReport = async () => {
     setLoading(true);
@@ -194,53 +79,20 @@ export default function Reports() {
         console.log('Fetching from API with params:', filterParams);
         const apiResponse = await APIService.getAbsenteeReport(filterParams);
         reportData = Array.isArray(apiResponse) ? apiResponse : [];
-        console.log('API report data received:', reportData);
+        console.log('Database report data received:', reportData);
         
       } catch (apiError) {
-        console.log('API failed, using demo data:', apiError);
-        // Use demo data when API fails
-        reportData = generateDemoAbsenteeData();
-        console.log('Using demo data for reports');
+        console.log('Database connection failed:', apiError);
+        reportData = [];
+        setError('Unable to connect to database. Please check your connection and try again.');
       }
 
-      // Apply client-side filtering based on report type
+      // Apply client-side filtering based on report type (if needed)
       const today = new Date();
       const todayStr = today.toISOString().split('T')[0];
       
-      switch (filters.reportType) {
-        case 'daily':
-          reportData = reportData.filter((record: AbsenteeRecord) => {
-            const recordDate = new Date(record.date).toISOString().split('T')[0];
-            return recordDate === todayStr;
-          });
-          break;
-        case 'weekly':
-          const startOfWeek = new Date(today);
-          startOfWeek.setDate(today.getDate() - today.getDay());
-          startOfWeek.setHours(0, 0, 0, 0);
-          reportData = reportData.filter((record: AbsenteeRecord) => 
-            new Date(record.date) >= startOfWeek
-          );
-          break;
-        case 'monthly':
-          const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-          reportData = reportData.filter((record: AbsenteeRecord) => 
-            new Date(record.date) >= startOfMonth
-          );
-          break;
-        case 'custom':
-          if (filters.dateFrom && filters.dateTo) {
-            const fromDate = new Date(filters.dateFrom);
-            const toDate = new Date(filters.dateTo);
-            toDate.setHours(23, 59, 59, 999);
-
-            reportData = reportData.filter((record: AbsenteeRecord) => {
-              const recordDate = new Date(record.date);
-              return recordDate >= fromDate && recordDate <= toDate;
-            });
-          }
-          break;
-      }
+      // Note: Filtering should be handled by the database/API, but keeping this as fallback
+      // The database view should handle most filtering based on the report_type parameter
 
       // Apply additional filters
       if (filters.fieldName) {
@@ -284,13 +136,11 @@ export default function Reports() {
         const courses = [...new Set(reportData.map((record: AbsenteeRecord) => record.courseTitle))];
         setAvailableFields(fields);
         setAvailableCourses(courses);
-        
-        LocalDBService.cacheData('rollcall_cached_reports', reportData);
       }
 
     } catch (error) {
       console.error('Failed to load absentee report:', error);
-      setError('Failed to load absentee report. Please try again.');
+      setError('Failed to load absentee report from database. Please check your connection and try again.');
       setAbsentees([]);
       setFieldReports([]);
     } finally {
