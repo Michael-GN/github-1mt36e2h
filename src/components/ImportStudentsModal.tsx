@@ -98,7 +98,7 @@ export default function ImportStudentsModal({ onClose, onImport, availableFields
         const preview = rows.slice(0, 5).map((row: any[]) => {
           const obj: any = {};
           headers.forEach((header, index) => {
-            obj[header] = (row as any[])[index] || '';
+            obj[header] = row[index] || '';
           });
           return obj;
         });
@@ -199,7 +199,7 @@ export default function ImportStudentsModal({ onClose, onImport, availableFields
         const headers = jsonData[0] as string[];
         const rows = jsonData.slice(1).filter((row: any) => row.some((cell: any) => cell !== null && cell !== ''));
 
-        const students = rows.map((row: unknown[], index: number) => {
+        const students = rows.map((row: any[], index: number) => {
           const student: any = {
             id: Date.now().toString() + index,
           };
@@ -207,7 +207,7 @@ export default function ImportStudentsModal({ onClose, onImport, availableFields
           Object.entries(mapping).forEach(([fieldKey, columnName]) => {
             const columnIndex = headers.indexOf(columnName);
             if (columnIndex !== -1) {
-              student[fieldKey] = row[columnIndex] || '';
+              student[fieldKey] = (row as any[])[columnIndex] || '';
             }
           });
 
