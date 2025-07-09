@@ -47,53 +47,31 @@ export default function Dashboard() {
         console.log('Dashboard data from API:', dashboardData);
         
         if (!dashboardData) {
-          console.log('No data from dashboard API, this indicates a database connection issue');
-          dashboardData = await generateStatsFromDatabase();
+          console.log('No data from dashboard API, database may be unavailable');
+          throw new Error('No dashboard data available from database');
         }
       } catch (apiError) {
-        console.log('Dashboard API failed, database may be unavailable:', apiError);
-        dashboardData = await generateStatsFromDatabase();
+        console.log('Dashboard API failed, database is unavailable:', apiError);
+        throw apiError;
       }
       
       setStats(dashboardData);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);
       setError('Failed to load dashboard statistics from database. Please check your connection and try refreshing.');
+      
+      // Set empty stats as fallback
+      setStats({
+        totalStudents: 0,
+        totalFields: 0,
+        todayAbsentees: 0,
+        weeklyAbsentees: 0,
+        monthlyAbsentees: 0,
+        fieldStats: [],
+        topAbsenteeFields: []
+      });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const generateStatsFromDatabase = async (): Promise<DashboardStats> => {
-    try {
-      console.log('Generating stats from database records...');
-      
-      // This should only be called if the main API fails
-      // In production, dashboard stats should come directly from the database
-      console.warn('Dashboard API failed, this should not happen in production');
-      
-      // Return empty stats if database is unavailable
-      return {
-        totalStudents: 0,
-        totalFields: 0,
-        todayAbsentees: 0,
-        weeklyAbsentees: 0,
-        monthlyAbsentees: 0,
-        fieldStats: [],
-        topAbsenteeFields: []
-      };
-    } catch (error) {
-      console.error('Failed to generate stats from database:', error);
-      // Return default stats
-      return {
-        totalStudents: 0,
-        totalFields: 0,
-        todayAbsentees: 0,
-        weeklyAbsentees: 0,
-        monthlyAbsentees: 0,
-        fieldStats: [],
-        topAbsenteeFields: []
-      };
     }
   };
 

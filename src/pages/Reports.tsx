@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Filter, Calendar, Users, BookOpen, Phone, MessageCircle, Download, TrendingDown, X, AlertTriangle, Search, FileText, Clock, RefreshCw, ArrowLeft, Eye } from 'lucide-react';
+import { Filter, Calendar, Users, BookOpen, Phone, MessageCircle, Download, TrendingDown, X, AlertTriangle, Search, FileText, Clock, RefreshCw, ArrowLeft, Eye, CheckCircle } from 'lucide-react';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
 import type { AbsenteeRecord, Student, Field } from '../types';
@@ -17,15 +17,18 @@ interface FilterState {
 
 interface FieldReport {
   fieldName: string;
-  totalAbsentees: number;
-  students: AbsenteeRecord[];
-  courses: string[];
+  totalStudents: number;
+  presentCount: number;
+  absentCount: number;
+  attendanceRate: number;
+  absentees: AbsenteeRecord[];
 }
 
 export default function Reports() {
   const [absentees, setAbsentees] = useState<AbsenteeRecord[]>([]);
   const [fieldReports, setFieldReports] = useState<FieldReport[]>([]);
   const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [selectedFieldData, setSelectedFieldData] = useState<FieldReport | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     dateFrom: new Date().toISOString().split('T')[0],
     dateTo: new Date().toISOString().split('T')[0],
@@ -49,22 +52,22 @@ export default function Reports() {
   ]);
 
   useEffect(() => {
-    loadAbsenteeReport();
+    loadFieldAttendanceSummary();
   }, [filters.reportType]);
 
 
 
-  const loadAbsenteeReport = async () => {
+  const loadFieldAttendanceSummary = async () => {
     setLoading(true);
     setError(null);
   
     try {
-      console.log('Loading absentee report with filters:', filters);
+      console.log('Loading field attendance summary with filters:', filters);
       
-      let reportData: AbsenteeRecord[] = [];
+      let fieldSummaryData: FieldReport[] = [];
       
       try {
-        // Try to get data from API first
+        // Get field attendance summary from database
         const filterParams = {
           date_from: filters.dateFrom,
           date_to: filters.dateTo,
@@ -76,99 +79,69 @@ export default function Reports() {
           ...(filters.matricule && { matricule: filters.matricule }),
         };
 
-        console.log('Fetching from API with params:', filterParams);
-        const apiResponse = await APIService.getAbsenteeReport(filterParams);
-        reportData = Array.isArray(apiResponse) ? apiResponse : [];
-        console.log('Database report data received:', reportData);
+        console.log('Fetching field summary from API with params:', filterParams);
+        const apiResponse = await APIService.getFieldAttendanceSummary(filterParams);
+        fieldSummaryData = Array.isArray(apiResponse) ? apiResponse : [];
+        console.log('Database field summary data received:', fieldSummaryData);
         
       } catch (apiError) {
         console.log('Database connection failed:', apiError);
-        reportData = [];
+        fieldSummaryData = [];
         setError('Unable to connect to database. Please check your connection and try again.');
       }
 
-      // Apply client-side filtering based on report type (if needed)
-      const today = new Date();
-      const todayStr = today.toISOString().split('T')[0];
-      
-      // Note: Filtering should be handled by the database/API, but keeping this as fallback
-      // The database view should handle most filtering based on the report_type parameter
-
-      // Apply additional filters
-      if (filters.fieldName) {
-        reportData = reportData.filter((record: AbsenteeRecord) => 
-          record.fieldName.toLowerCase().includes(filters.fieldName.toLowerCase())
-        );
-      }
-
-      if (filters.level) {
-        reportData = reportData.filter((record: AbsenteeRecord) => record.level === filters.level);
-      }
-
-      if (filters.courseTitle) {
-        reportData = reportData.filter((record: AbsenteeRecord) => 
-          record.courseTitle.toLowerCase().includes(filters.courseTitle.toLowerCase())
-        );
-      }
-
-      if (filters.studentName) {
-        reportData = reportData.filter((record: AbsenteeRecord) => 
-          record.studentName.toLowerCase().includes(filters.studentName.toLowerCase())
-        );
-      }
-
-      if (filters.matricule) {
-        reportData = reportData.filter((record: AbsenteeRecord) => 
-          record.matricule.toLowerCase().includes(filters.matricule.toLowerCase())
-        );
-      }
-
-      console.log('Final filtered data:', reportData);
-      setAbsentees(reportData);
-      
-      // Generate field reports
-      const fieldReportsData = generateFieldReports(reportData);
-      setFieldReports(fieldReportsData);
+      console.log('Final field summary data:', fieldSummaryData);
+      setFieldReports(fieldSummaryData);
       
       // Update available options
-      if (reportData.length > 0) {
-        const fields = [...new Set(reportData.map((record: AbsenteeRecord) => record.fieldName))];
-        const courses = [...new Set(reportData.map((record: AbsenteeRecord) => record.courseTitle))];
+      if (fieldSummaryData.length > 0) {
+        const fields = [...new Set(fieldSummaryData.map((field: FieldReport) => field.fieldName))];
         setAvailableFields(fields);
-        setAvailableCourses(courses);
       }
 
     } catch (error) {
-      console.error('Failed to load absentee report:', error);
-      setError('Failed to load absentee report from database. Please check your connection and try again.');
-      setAbsentees([]);
+      console.error('Failed to load field attendance summary:', error);
+      setError('Failed to load attendance summary from database. Please check your connection and try again.');
       setFieldReports([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateFieldReports = (data: AbsenteeRecord[]): FieldReport[] => {
-    const fieldMap = new Map<string, AbsenteeRecord[]>();
-    
-    data.forEach(record => {
-      if (!fieldMap.has(record.fieldName)) {
-        fieldMap.set(record.fieldName, []);
-      }
-      fieldMap.get(record.fieldName)!.push(record);
-    });
-
-    return Array.from(fieldMap.entries()).map(([fieldName, students]) => ({
-      fieldName,
-      totalAbsentees: students.length,
-      students,
-      courses: [...new Set(students.map(s => s.courseTitle))]
-    })).sort((a, b) => b.totalAbsentees - a.totalAbsentees);
+  const loadFieldAbsentees = async (fieldName: string) => {
+    try {
+      setLoading(true);
+      console.log('Loading absentees for field:', fieldName);
+      
+      const filterParams = {
+        date_from: filters.dateFrom,
+        date_to: filters.dateTo,
+        report_type: filters.reportType,
+        field: fieldName,
+        ...(filters.level && { level: filters.level }),
+        ...(filters.courseTitle && { course: filters.courseTitle }),
+        ...(filters.studentName && { student_name: filters.studentName }),
+        ...(filters.matricule && { matricule: filters.matricule }),
+      };
+      
+      const absenteeData = await APIService.getAbsenteeReport(filterParams);
+      setAbsentees(Array.isArray(absenteeData) ? absenteeData : []);
+      
+      // Find the field data
+      const fieldData = fieldReports.find(f => f.fieldName === fieldName);
+      setSelectedFieldData(fieldData || null);
+      
+    } catch (error) {
+      console.error('Failed to load field absentees:', error);
+      setError('Failed to load absentees for this field.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRefreshReports = async () => {
     setRefreshing(true);
-    await loadAbsenteeReport();
+    await loadFieldAttendanceSummary();
     setRefreshing(false);
   };
 
@@ -177,7 +150,7 @@ export default function Reports() {
   };
 
   const handleApplyFilters = () => {
-    loadAbsenteeReport();
+    loadFieldAttendanceSummary();
     setShowFilters(false);
   };
 
@@ -342,23 +315,11 @@ export default function Reports() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-lg">
-                <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Absentees</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{absentees.length}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center">
               <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
                 <BookOpen className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fields Affected</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Fields with Data</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">{fieldReports.length}</p>
               </div>
             </div>
@@ -366,13 +327,13 @@ export default function Reports() {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-3 bg-yellow-100 dark:bg-yellow-900 rounded-lg">
-                <Calendar className="w-6 h-6 text-yellow-600 dark:text-yellow-400" />
+              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
+                <Users className="w-6 h-6 text-green-600 dark:text-green-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Courses Affected</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Present</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {[...new Set(absentees.map((a: AbsenteeRecord) => a.courseTitle))].length}
+                  {fieldReports.reduce((sum, field) => sum + field.presentCount, 0)}
                 </p>
               </div>
             </div>
@@ -380,13 +341,30 @@ export default function Reports() {
 
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="flex items-center">
-              <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
-                <Phone className="w-6 h-6 text-green-600 dark:text-green-400" />
+              <div className="p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Parents to Contact</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Absent</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {[...new Set(absentees.map((a: AbsenteeRecord) => a.parentPhone))].length}
+                  {fieldReports.reduce((sum, field) => sum + field.absentCount, 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+            <div className="flex items-center">
+              <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                <TrendingDown className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Attendance</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {fieldReports.length > 0 
+                    ? (fieldReports.reduce((sum, field) => sum + field.attendanceRate, 0) / fieldReports.length).toFixed(1)
+                    : 0
+                  }%
                 </p>
               </div>
             </div>
@@ -403,31 +381,40 @@ export default function Reports() {
                     {fieldReport.fieldName}
                   </h3>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {fieldReport.courses.length} courses affected
+                    {fieldReport.totalStudents} total students
                   </p>
                 </div>
-                <span className="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded-full dark:bg-red-900 dark:text-red-200">
-                  {fieldReport.totalAbsentees} absent
+                <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
+                  fieldReport.attendanceRate >= 90 
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                    : fieldReport.attendanceRate >= 75
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                }`}>
+                  {fieldReport.attendanceRate.toFixed(1)}%
                 </span>
               </div>
               
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                 <div className="flex items-center space-x-2">
-                  <Users className="w-4 h-4" />
-                  <span>{fieldReport.totalAbsentees} students absent</span>
+                  <CheckCircle className="w-4 h-4 text-green-500" />
+                  <span>{fieldReport.presentCount} present</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <BookOpen className="w-4 h-4" />
-                  <span>{fieldReport.courses.slice(0, 2).join(', ')}{fieldReport.courses.length > 2 ? '...' : ''}</span>
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <span>{fieldReport.absentCount} absent</span>
                 </div>
               </div>
               
               <button
-                onClick={() => setSelectedField(fieldReport.fieldName)}
+                onClick={() => {
+                  setSelectedField(fieldReport.fieldName);
+                  loadFieldAbsentees(fieldReport.fieldName);
+                }}
                 className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Eye className="w-4 h-4" />
-                <span>View Details</span>
+                <span>View Absentees</span>
               </button>
             </div>
           ))}
@@ -545,8 +532,6 @@ export default function Reports() {
 
   // Show individual field report
   if (selectedField) {
-    const fieldData = absentees.filter(record => record.fieldName === selectedField);
-    
     return (
       <div className="space-y-6">
         {/* Header */}
@@ -560,10 +545,10 @@ export default function Reports() {
             </button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {selectedField} - Absentee Report
+                {selectedField} - Attendance Report
               </h1>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
-                {fieldData.length} students absent • {getReportDescription()}
+                {selectedFieldData ? `${selectedFieldData.absentCount} absent, ${selectedFieldData.presentCount} present` : 'Loading...'} • {getReportDescription()}
               </p>
             </div>
           </div>
@@ -578,6 +563,59 @@ export default function Reports() {
             </button>
           </div>
         </div>
+
+        {/* Field Summary Stats */}
+        {selectedFieldData && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center">
+                <div className="p-3 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                  <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Students</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedFieldData.totalStudents}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center">
+                <div className="p-3 bg-green-100 dark:bg-green-900 rounded-lg">
+                  <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Present</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedFieldData.presentCount}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center">
+                <div className="p-3 bg-red-100 dark:bg-red-900 rounded-lg">
+                  <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Absent</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedFieldData.absentCount}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center">
+                <div className="p-3 bg-purple-100 dark:bg-purple-900 rounded-lg">
+                  <TrendingDown className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Attendance Rate</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedFieldData.attendanceRate.toFixed(1)}%</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Search */}
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-gray-200 dark:border-gray-700">
@@ -616,6 +654,15 @@ export default function Reports() {
 
         {/* Students Table */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+              Absentee Students ({absentees.length})
+            </h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Students who were marked absent (is_present = 0)
+            </p>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-700">
@@ -641,7 +688,7 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {fieldData.map((record: AbsenteeRecord) => (
+                {absentees.map((record: AbsenteeRecord) => (
                   <tr key={record.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -706,12 +753,12 @@ export default function Reports() {
         </div>
 
         {/* Empty State */}
-        {fieldData.length === 0 && (
+        {absentees.length === 0 && !loading && (
           <div className="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-sm border border-gray-200 dark:border-gray-700 text-center">
-            <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Absentees Found</h3>
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Perfect Attendance!</h3>
             <p className="text-gray-500 dark:text-gray-400">
-              No absentee records found for {selectedField} in the selected time period.
+              No students were absent from {selectedField} in the selected time period.
             </p>
           </div>
         )}
@@ -795,10 +842,10 @@ export default function Reports() {
 
       {/* Empty State */}
       <div className="bg-white dark:bg-gray-800 rounded-lg p-8 shadow-sm border border-gray-200 dark:border-gray-700 text-center">
-        <AlertTriangle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No Absentees Found</h3>
+        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No attendance data available</h3>
         <p className="text-gray-500 dark:text-gray-400">
-          No absentee records found for the selected criteria. This could mean:
+          No attendance records found for the selected criteria.
         </p>
         <ul className="text-sm text-gray-500 dark:text-gray-400 mt-2 space-y-1">
           <li>• All students were present during the selected period</li>

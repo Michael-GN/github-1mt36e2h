@@ -35,69 +35,36 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    loadAbsenteeHours();
+    loadDetailedAbsenteeHours();
   }, [students]);
 
-  const loadAbsenteeHours = async () => {
+  const loadDetailedAbsenteeHours = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Loading student absentee hours from database...');
+      console.log('Loading detailed student absentee hours from database...');
       
-      // Get absentee data from the database with proper typing
-      let absenteeData: AbsenteeRecord[] = [];
+      // Get detailed absentee hours data from database
+      let absenteeHoursData: StudentAbsenteeHours[] = [];
       try {
-        const apiResponse = await APIService.getAbsenteeReport({
+        const apiResponse = await APIService.getDetailedStudentAbsenteeHours({
           report_type: 'monthly',
           date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
           date_to: new Date().toISOString().split('T')[0]
         });
-        absenteeData = Array.isArray(apiResponse) ? apiResponse : [];
-        console.log('Absentee data from database:', absenteeData);
+        absenteeHoursData = Array.isArray(apiResponse) ? apiResponse : [];
+        console.log('Detailed absentee hours data from database:', absenteeHoursData);
       } catch (apiError) {
-        console.log('Failed to fetch from API, will show all students with zero hours');
-        absenteeData = [];
+        console.log('Failed to fetch detailed absentee hours from API, generating from students list');
+        absenteeHoursData = generateEmptyAbsenteeHours();
       }
       
-      // Process the data to calculate hours for each student
-      const hoursData: StudentAbsenteeHours[] = students.map(student => {
-        // Find all absentee records for this student
-        const studentAbsences = absenteeData.filter((record: AbsenteeRecord) => 
-          record.studentName === student.name || 
-          record.matricule === student.matricule
-        );
-
-        // Calculate total hours and sessions
-        const absentSessions = studentAbsences.map((absence: AbsenteeRecord) => ({
-          date: absence.date,
-          course: absence.courseTitle,
-          courseCode: absence.courseCode,
-          duration: calculateSessionDuration(absence.timeSlot || '2 hours'),
-          timeSlot: absence.timeSlot || 'Unknown time'
-        }));
-
-        const totalAbsentHours = absentSessions.reduce(
-          (sum: number, session: { duration: number }) => sum + session.duration,
-          0
-        );
-
-        return {
-          studentId: student.id,
-          studentName: student.name,
-          matricule: student.matricule,
-          field: student.field,
-          level: student.level,
-          totalAbsentHours,
-          absentSessions
-        };
-      });
-
-      console.log('Processed absentee hours data:', hoursData);
-      setAbsenteeHours(hoursData);
+      console.log('Final absentee hours data:', absenteeHoursData);
+      setAbsenteeHours(absenteeHoursData);
       
       // Cache the processed data
-      LocalDBService.cacheData('rollcall_cached_absentee_hours', hoursData);
+      LocalDBService.cacheData('rollcall_cached_absentee_hours', absenteeHoursData);
 
     } catch (error) {
       console.error('Failed to load absentee hours:', error);
@@ -108,15 +75,29 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       if (cachedData) {
         setAbsenteeHours(cachedData);
         setError('Showing cached data. Click refresh for latest information.');
+      } else {
+        // Generate empty data for all students
+        setAbsenteeHours(generateEmptyAbsenteeHours());
       }
     } finally {
       setLoading(false);
     }
   };
 
+  const generateEmptyAbsenteeHours = (): StudentAbsenteeHours[] => {
+    return students.map(student => ({
+      studentId: student.id,
+      studentName: student.name,
+      matricule: student.matricule,
+      field: student.field,
+      level: student.level,
+      totalAbsentHours: 0,
+      absentSessions: []
+    }));
+  };
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadAbsenteeHours();
+    await loadDetailedAbsenteeHours();
     setRefreshing(false);
   };
 
