@@ -228,6 +228,33 @@ export class APIService {
     }
   }
 
+  // Get field attendance summary (present/absent counts per field)
+  static async getFieldAttendanceSummary(filters: any = {}) {
+    try {
+      const params = new URLSearchParams();
+      
+      // Add filter parameters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] && filters[key] !== '') {
+          params.append(key, filters[key]);
+        }
+      });
+      
+      console.log('Fetching field attendance summary with filters:', filters);
+      
+      const response = await this.fetchWithTimeout(
+        `${API_BASE_URL}/get_field_attendance_summary.php?${params}`
+      );
+      
+      const data = await this.handleResponse(response);
+      console.log('Field attendance summary data:', data);
+      
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch field attendance summary:', error);
+      return [];
+    }
+  }
 
   // Get student absentee hours from database
   static async getStudentAbsenteeHours() {
@@ -245,6 +272,33 @@ export class APIService {
     }
   }
 
+  // Get detailed student absentee hours with session details
+  static async getDetailedStudentAbsenteeHours(filters: any = {}) {
+    try {
+      const params = new URLSearchParams();
+      
+      // Add filter parameters
+      Object.keys(filters).forEach(key => {
+        if (filters[key] && filters[key] !== '') {
+          params.append(key, filters[key]);
+        }
+      });
+      
+      console.log('Fetching detailed student absentee hours...');
+      
+      const response = await this.fetchWithTimeout(
+        `${API_BASE_URL}/get_detailed_student_absentee_hours.php?${params}`
+      );
+      
+      const data = await this.handleResponse(response);
+      console.log('Detailed student absentee hours data:', data);
+      
+      return data || [];
+    } catch (error) {
+      console.error('Failed to fetch detailed student absentee hours:', error);
+      return [];
+    }
+  }
   // Enhanced dashboard stats - now fetches real-time data from database
   static async getDashboardStats() {
     try {
