@@ -53,10 +53,16 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
           date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
           date_to: new Date().toISOString().split('T')[0]
         });
-        absenteeHoursData = Array.isArray(apiResponse) ? apiResponse : [];
-        console.log('Detailed absentee hours data from database:', absenteeHoursData);
+        
+        if (Array.isArray(apiResponse)) {
+          absenteeHoursData = apiResponse;
+        } else {
+          absenteeHoursData = [];
+        }
+        
+        console.log('Database absentee hours data received:', absenteeHoursData);
       } catch (apiError) {
-        console.log('Failed to fetch detailed absentee hours from API, generating from students list');
+        console.log('Failed to fetch absentee hours from API, generating from students list');
         absenteeHoursData = generateEmptyAbsenteeHours();
       }
       
@@ -72,7 +78,7 @@ export default function StudentAbsenteeHours({ students }: StudentAbsenteeHoursP
       
       // Try to load from cache as fallback
       const cachedData = LocalDBService.getCachedData('rollcall_cached_absentee_hours');
-      if (cachedData) {
+      if (cachedData && Array.isArray(cachedData)) {
         setAbsenteeHours(cachedData);
         setError('Showing cached data. Click refresh for latest information.');
       } else {
