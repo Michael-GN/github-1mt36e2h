@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Phone, Mail, User, BookOpen, Users, Edit, Plus, X, Save, Upload, Eye, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Search, Filter, Phone, Mail, User, BookOpen, Users, Edit, Plus, X, Save, Upload, Eye, ArrowLeft, Clock, AlertTriangle } from 'lucide-react';
 import ImportStudentsModal from '../components/ImportStudentsModal';
 import StudentAbsenteeHours from '../components/StudentAbsenteeHours';
 import { APIService } from '../utils/api';
@@ -12,8 +12,20 @@ interface FilterState {
   search: string;
 }
 
+interface StudentWithAbsenteeHours extends Student {
+  totalAbsentHours: number;
+  absentSessions: Array<{
+    date: string;
+    course: string;
+    courseCode: string;
+    duration: number;
+    timeSlot: string;
+  }>;
+}
+
 export default function Students() {
   const [students, setStudents] = useState<Student[]>([]);
+  const [studentsWithAbsenteeHours, setStudentsWithAbsenteeHours] = useState<StudentWithAbsenteeHours[]>([]);
   const [fields, setFields] = useState<Field[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [filters, setFilters] = useState<FilterState>({
@@ -44,6 +56,7 @@ export default function Students() {
   useEffect(() => {
     loadStudentsData();
     loadFieldsData();
+    loadStudentAbsenteeHours();
   }, []);
 
   useEffect(() => {
@@ -75,6 +88,44 @@ export default function Students() {
 
     } catch (error) {
       console.error('Failed to load fields:', error);
+    }
+  };
+
+  const loadStudentAbsenteeHours = async () => {
+    try {
+      console.log('Loading student absentee hours from database...');
+      
+      // Get detailed absentee hours data from database
+      const absenteeHoursData = await APIService.getDetailedStudentAbsenteeHours({
+        report_type: 'monthly',
+        date_from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        date_to: new Date().toISOString().split('T')[0]
+      });
+
+      console.log('Absentee hours data received:', absenteeHoursData);
+
+      if (Array.isArray(absenteeHoursData)) {
+        // Process the data to match our interface
+        const processedData: StudentWithAbsenteeHours[] = absenteeHoursData.map((data: any) => ({
+          id: data.studentId || '',
+          name: data.studentName || '',
+          matricule: data.matricule || '',
+          field: data.field || '',
+          level: data.level || '',
+          parentName: '', // Will be filled from students data
+          parentPhone: '', // Will be filled from students data
+          parentEmail: '', // Will be filled from students data
+          totalAbsentHours: Number(data.totalAbsentHours) || 0,
+          absentSessions: data.absentSessions || []
+        }));
+
+        setStudentsWithAbsenteeHours(processedData);
+      }
+
+    } catch (error) {
+      console.error('Failed to load student absentee hours:', error);
+      // Set empty data if API fails
+      setStudentsWithAbsenteeHours([]);
     }
   };
 
@@ -214,6 +265,9 @@ export default function Students() {
       });
       setError(null);
 
+      // Reload absentee hours data
+      loadStudentAbsenteeHours();
+
     } catch (error) {
       console.error('Failed to save student:', error);
       setError('Failed to save student data.');
@@ -223,6 +277,8 @@ export default function Students() {
   const handleImportStudents = (importedStudents: any[]) => {
     setStudents(prev => [...prev, ...importedStudents]);
     setShowImportModal(false);
+    // Reload absentee hours data
+    loadStudentAbsenteeHours();
   };
 
   const handleCancel = () => {
@@ -244,15 +300,35 @@ export default function Students() {
   const getFieldStats = () => {
     return fields.map(field => {
       const fieldStudents = students.filter(student => student.field === field.name);
+      const fieldAbsenteeData = studentsWithAbsenteeHours.filter(student => student.field === field.name);
+      const totalAbsentHours = fieldAbsenteeData.reduce((sum, student) => sum + student.totalAbsentHours, 0);
+      
       return {
         ...field,
         actualStudents: fieldStudents.length,
+        totalAbsentHours,
         levels: ['Level 100', 'Level 200'].map(level => ({
           name: level,
-          count: fieldStudents.filter(student => student.level === level).length
+          count: fieldStudents.filter(student => student.level === level).length,
+          absentHours: fieldAbsenteeData
+            .filter(student => student.level === level)
+            .reduce((sum, student) => sum + student.totalAbsentHours, 0)
         }))
       };
     });
+  };
+
+  const getStudentAbsenteeHours = (studentId: string): number => {
+    const absenteeData = studentsWithAbsenteeHours.find(data => data.id === studentId);
+    return absenteeData?.totalAbsentHours || 0;
+  };
+
+  const getRiskLevel = (absentHours: number): { level: string; color: string } => {
+    if (absentHours >= 15) return { level: 'Critical', color: 'bg-red-600 text-white' };
+    if (absentHours >= 10) return { level: 'High', color: 'bg-red-100 text-red-800' };
+    if (absentHours >= 5) return { level: 'Medium', color: 'bg-yellow-100 text-yellow-800' };
+    if (absentHours === 0) return { level: 'Perfect', color: 'bg-green-100 text-green-800' };
+    return { level: 'Low', color: 'bg-blue-100 text-blue-800' };
   };
 
   if (loading) {
@@ -308,7 +384,7 @@ export default function Students() {
                 <p className="text-blue-100 mt-1">
                   {viewingFieldStudents 
                     ? `Viewing students in ${viewingFieldStudents.field}${viewingFieldStudents.level ? ` (${viewingFieldStudents.level})` : ''}`
-                    : 'Manage student information and parent contacts'
+                    : 'Manage student information and track absentee hours'
                   }
                 </p>
               </div>
@@ -321,7 +397,7 @@ export default function Students() {
                 onClick={() => setShowAbsenteeHours(true)}
                 className="flex items-center space-x-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
               >
-                <Users className="w-4 h-4" />
+                <Clock className="w-4 h-4" />
                 <span>Absentee Hours</span>
               </button>
             )}
@@ -369,12 +445,24 @@ export default function Students() {
                 </div>
               </div>
               
+              {/* Absentee Hours Summary */}
+              <div className="bg-red-50 dark:bg-red-900 rounded-lg p-3 mb-4">
+                <div className="flex items-center space-x-2 mb-2">
+                  <Clock className="w-4 h-4 text-red-600 dark:text-red-400" />
+                  <span className="text-sm font-medium text-red-800 dark:text-red-200">Total Absent Hours</span>
+                </div>
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {field.totalAbsentHours}h
+                </div>
+              </div>
+              
               <div className="space-y-2 mb-4">
                 {field.levels.map((level) => (
                   <div key={level.name} className="flex items-center justify-between text-sm">
                     <span className="text-gray-600 dark:text-gray-400">{level.name}</span>
                     <div className="flex items-center space-x-2">
                       <span className="font-semibold text-gray-900 dark:text-white">{level.count}</span>
+                      <span className="text-xs text-red-600 dark:text-red-400">({level.absentHours}h)</span>
                       {level.count > 0 && (
                         <button
                           onClick={() => handleViewFieldStudents(field.name, level.name)}
@@ -643,92 +731,126 @@ export default function Students() {
 
       {/* Students Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredStudents.map((student) => (
-          <div key={student.id} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
-            <div className="flex items-start space-x-4">
-              <img
-                src={student.photo || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'}
-                alt={student.name}
-                className="w-16 h-16 rounded-full object-cover border-2 border-blue-600"
-              />
-              
-              <div className="flex-1">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                      {student.name}
-                    </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {student.matricule}
-                    </p>
+        {filteredStudents.map((student) => {
+          const absentHours = getStudentAbsenteeHours(student.id);
+          const riskLevel = getRiskLevel(absentHours);
+          
+          return (
+            <div key={student.id} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <div className="flex items-start space-x-4">
+                <img
+                  src={student.photo || 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=150&h=150&fit=crop'}
+                  alt={student.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-blue-600"
+                />
+                
+                <div className="flex-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                        {student.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {student.matricule}
+                      </p>
+                    </div>
+                    
+                    <button 
+                      onClick={() => handleEditStudent(student)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
                   </div>
                   
-                  <button 
-                    onClick={() => handleEditStudent(student)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </button>
-                </div>
-                
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-                    <BookOpen className="w-4 h-4" />
-                    <span>{student.field}</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
-                    <Users className="w-4 h-4" />
-                    <span>{student.level}</span>
+                  <div className="mt-3 space-y-2">
+                    <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                      <BookOpen className="w-4 h-4" />
+                      <span>{student.field}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-sm text-gray-600 dark:text-gray-400">
+                      <Users className="w-4 h-4" />
+                      <span>{student.level}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Parent Information */}
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                Parent Contact
-              </h4>
-              
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2 text-sm">
-                  <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                  <span className="text-gray-900 dark:text-white font-medium">{student.parentName}</span>
-                </div>
-                
+              {/* Absentee Hours Display */}
+              <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2 text-sm">
-                    <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                    <span className="text-gray-900 dark:text-white">{student.parentPhone}</span>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Absent Hours: {absentHours}h
+                    </span>
                   </div>
-                  <button
-                    onClick={() => handleCallParent(student.parentPhone)}
-                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
-                    title="Call Parent"
-                  >
-                    <Phone className="w-4 h-4" />
-                  </button>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${riskLevel.color}`}>
+                    {riskLevel.level}
+                  </span>
                 </div>
-                
-                {student.parentEmail && (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2 text-sm">
-                      <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
-                      <span className="text-gray-900 dark:text-white truncate">{student.parentEmail}</span>
+                {absentHours > 0 && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full ${
+                          absentHours >= 15 ? 'bg-red-600' :
+                          absentHours >= 10 ? 'bg-red-400' :
+                          absentHours >= 5 ? 'bg-yellow-400' : 'bg-blue-400'
+                        }`}
+                        style={{ width: `${Math.min((absentHours / 20) * 100, 100)}%` }}
+                      ></div>
                     </div>
-                    <button
-                      onClick={() => handleEmailParent(student.parentEmail!)}
-                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
-                      title="Email Parent"
-                    >
-                      <Mail className="w-4 h-4" />
-                    </button>
                   </div>
                 )}
               </div>
+
+              {/* Parent Information */}
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                  Parent Contact
+                </h4>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2 text-sm">
+                    <User className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                    <span className="text-gray-900 dark:text-white font-medium">{student.parentName}</span>
+                  </div>
+                  
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2 text-sm">
+                      <Phone className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                      <span className="text-gray-900 dark:text-white">{student.parentPhone}</span>
+                    </div>
+                    <button
+                      onClick={() => handleCallParent(student.parentPhone)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
+                      title="Call Parent"
+                    >
+                      <Phone className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  {student.parentEmail && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-sm">
+                        <Mail className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                        <span className="text-gray-900 dark:text-white truncate">{student.parentEmail}</span>
+                      </div>
+                      <button
+                        onClick={() => handleEmailParent(student.parentEmail!)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900 rounded-lg transition-colors"
+                        title="Email Parent"
+                      >
+                        <Mail className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Empty State */}

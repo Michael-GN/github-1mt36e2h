@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Filter, Calendar, Users, BookOpen, Phone, MessageCircle, Download, TrendingDown, X, AlertTriangle, Search, FileText, Clock, RefreshCw, ArrowLeft, Eye, CheckCircle } from 'lucide-react';
 import { APIService } from '../utils/api';
 import { LocalDBService } from '../utils/localdb';
@@ -21,10 +21,18 @@ interface FieldReport {
   presentCount: number;
   absentCount: number;
   attendanceRate: number;
-  absentees: AbsenteeRecord[];
+  absentees?: AbsenteeRecord[];
 }
 
 export default function Reports() {
+  // Helper function to safely format attendance rates
+  const formatAttendanceRate = (rate: number | string | null | undefined): string => {
+    if (rate === null || rate === undefined || rate === '' || isNaN(Number(rate))) {
+      return '0.0';
+    }
+    return Number(rate).toFixed(1);
+  };
+
   const [absentees, setAbsentees] = useState<AbsenteeRecord[]>([]);
   const [fieldReports, setFieldReports] = useState<FieldReport[]>([]);
   const [selectedField, setSelectedField] = useState<string | null>(null);
@@ -55,8 +63,6 @@ export default function Reports() {
     loadFieldAttendanceSummary();
   }, [filters.reportType]);
 
-
-
   const loadFieldAttendanceSummary = async () => {
     setLoading(true);
     setError(null);
@@ -81,7 +87,17 @@ export default function Reports() {
 
         console.log('Fetching field summary from API with params:', filterParams);
         const apiResponse = await APIService.getFieldAttendanceSummary(filterParams);
-        fieldSummaryData = Array.isArray(apiResponse) ? apiResponse : [];
+        
+        // Process the data to ensure all numeric fields are properly converted
+        fieldSummaryData = Array.isArray(apiResponse) ? apiResponse.map((field: any) => ({
+          fieldName: field.fieldName || '',
+          attendanceRate: Number(field.attendanceRate) || 0,
+          totalStudents: Number(field.totalStudents) || 0,
+          presentCount: Number(field.presentCount) || 0,
+          absentCount: Number(field.absentCount) || 0,
+          absentees: field.absentees || [] // Ensure absentees array exists
+        })) : [];
+        
         console.log('Database field summary data received:', fieldSummaryData);
         
       } catch (apiError) {
@@ -111,6 +127,7 @@ export default function Reports() {
   const loadFieldAbsentees = async (fieldName: string) => {
     try {
       setLoading(true);
+      setError(null);
       console.log('Loading absentees for field:', fieldName);
       
       const filterParams = {
@@ -124,16 +141,49 @@ export default function Reports() {
         ...(filters.matricule && { matricule: filters.matricule }),
       };
       
-      const absenteeData = await APIService.getAbsenteeReport(filterParams);
-      setAbsentees(Array.isArray(absenteeData) ? absenteeData : []);
+      console.log('Fetching absentees with params:', filterParams);
       
-      // Find the field data
+      // Try to get absentees from the API
+      let absenteeData: AbsenteeRecord[] = [];
+      
+      try {
+        const apiResponse = await APIService.getAbsenteeReport(filterParams);
+        console.log('API response for absentees:', apiResponse);
+        
+        if (Array.isArray(apiResponse)) {
+          absenteeData = apiResponse;
+        } else if (apiResponse && typeof apiResponse === 'object') {
+          // Handle case where response might be wrapped in an object
+          absenteeData = (apiResponse as any).data || (apiResponse as any).absentees || [];
+        } else {
+          absenteeData = [];
+        }
+        
+        console.log('Processed absentee data:', absenteeData);
+        
+      } catch (apiError) {
+        console.error('API call failed for absentees:', apiError);
+        // Fallback: try to get from field report if available
+        const fieldData = fieldReports.find(f => f.fieldName === fieldName);
+        if (fieldData && fieldData.absentees) {
+          absenteeData = fieldData.absentees;
+          console.log('Using absentees from field report:', absenteeData);
+        }
+      }
+      
+      setAbsentees(absenteeData);
+      
+      // Find the field data for summary stats
       const fieldData = fieldReports.find(f => f.fieldName === fieldName);
       setSelectedFieldData(fieldData || null);
       
+      if (absenteeData.length === 0 && fieldData && fieldData.absentCount > 0) {
+        setError(`Found ${fieldData.absentCount} absentees but couldn't load detailed records. This might be a data synchronization issue.`);
+      }
+      
     } catch (error) {
       console.error('Failed to load field absentees:', error);
-      setError('Failed to load absentees for this field.');
+      setError('Failed to load absentees for this field. Please try refreshing the data.');
     } finally {
       setLoading(false);
     }
@@ -141,6 +191,15 @@ export default function Reports() {
 
   const handleRefreshReports = async () => {
     setRefreshing(true);
+    setError(null);
+    
+    // Clear current data
+    setAbsentees([]);
+    setFieldReports([]);
+    setSelectedField(null);
+    setSelectedFieldData(null);
+    
+    // Reload data
     await loadFieldAttendanceSummary();
     setRefreshing(false);
   };
@@ -150,7 +209,13 @@ export default function Reports() {
   };
 
   const handleApplyFilters = () => {
-    loadFieldAttendanceSummary();
+    if (selectedField) {
+      // If a field is selected, reload its absentees
+      loadFieldAbsentees(selectedField);
+    } else {
+      // Otherwise reload the summary
+      loadFieldAttendanceSummary();
+    }
     setShowFilters(false);
   };
 
@@ -166,14 +231,30 @@ export default function Reports() {
       matricule: '',
     });
     setSelectedField(null);
+    setSelectedFieldData(null);
+    setAbsentees([]);
+    setError(null);
   };
 
   const handleCallParent = (phoneNumber: string) => {
+    if (!phoneNumber) {
+      alert('No phone number available for this parent.');
+      return;
+    }
+    
+    // Copy to clipboard for convenience
     navigator.clipboard.writeText(phoneNumber).catch(console.error);
+    
+    // Try to initiate call
     window.location.href = `tel:${phoneNumber}`;
   };
 
   const handleSendSMS = (phoneNumber: string, studentName: string) => {
+    if (!phoneNumber) {
+      alert('No phone number available for this parent.');
+      return;
+    }
+    
     const message = `Hello, this is regarding ${studentName}'s attendance. Please contact the school for more information.`;
     const encodedMessage = encodeURIComponent(message);
     window.location.href = `sms:${phoneNumber}?body=${encodedMessage}`;
@@ -184,17 +265,22 @@ export default function Reports() {
       ? absentees.filter(record => record.fieldName === selectedField)
       : absentees;
 
+    if (dataToExport.length === 0) {
+      alert('No data to export.');
+      return;
+    }
+
     const csvContent = [
       ['Student Name', 'Matricule', 'Field', 'Level', 'Course', 'Parent Name', 'Parent Phone', 'Date'].join(','),
       ...dataToExport.map((record: AbsenteeRecord) => [
-        record.studentName,
-        record.matricule,
-        record.fieldName,
-        record.level,
-        `${record.courseTitle} (${record.courseCode})`,
-        record.parentName,
-        record.parentPhone,
-        new Date(record.date).toLocaleDateString()
+        record.studentName || '',
+        record.matricule || '',
+        record.fieldName || '',
+        record.level || '',
+        `${record.courseTitle || ''} (${record.courseCode || ''})`,
+        record.parentName || '',
+        record.parentPhone || '',
+        record.date ? new Date(record.date).toLocaleDateString() : ''
       ].join(','))
     ].join('\n');
 
@@ -306,6 +392,12 @@ export default function Reports() {
               <AlertTriangle className="w-5 h-5 text-yellow-600 mr-3" />
               <div>
                 <p className="text-yellow-800 font-medium">{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-yellow-600 hover:text-yellow-800 text-sm underline mt-1"
+                >
+                  Dismiss
+                </button>
               </div>
             </div>
           </div>
@@ -333,7 +425,7 @@ export default function Reports() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Present</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {fieldReports.reduce((sum, field) => sum + field.presentCount, 0)}
+                  {fieldReports.reduce((sum, field) => sum + (field.presentCount || 0), 0)}
                 </p>
               </div>
             </div>
@@ -347,7 +439,7 @@ export default function Reports() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Absent</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {fieldReports.reduce((sum, field) => sum + field.absentCount, 0)}
+                  {fieldReports.reduce((sum, field) => sum + (field.absentCount || 0), 0)}
                 </p>
               </div>
             </div>
@@ -362,7 +454,7 @@ export default function Reports() {
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Avg Attendance</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {fieldReports.length > 0 
-                    ? (fieldReports.reduce((sum, field) => sum + field.attendanceRate, 0) / fieldReports.length).toFixed(1)
+                    ? (fieldReports.reduce((sum, field) => sum + (Number(field.attendanceRate) || 0), 0) / fieldReports.length).toFixed(1)
                     : 0
                   }%
                 </p>
@@ -385,24 +477,24 @@ export default function Reports() {
                   </p>
                 </div>
                 <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${
-                  fieldReport.attendanceRate >= 90 
+                  Number(fieldReport.attendanceRate || 0) >= 90 
                     ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                    : fieldReport.attendanceRate >= 75
+                    : Number(fieldReport.attendanceRate || 0) >= 75
                     ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                     : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                 }`}>
-                  {fieldReport.attendanceRate.toFixed(1)}%
+                  {formatAttendanceRate(fieldReport.attendanceRate)}%
                 </span>
               </div>
               
               <div className="space-y-2 text-sm text-gray-600 dark:text-gray-400 mb-4">
                 <div className="flex items-center space-x-2">
                   <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span>{fieldReport.presentCount} present</span>
+                  <span>{fieldReport.presentCount || 0} present</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   <AlertTriangle className="w-4 h-4 text-red-500" />
-                  <span>{fieldReport.absentCount} absent</span>
+                  <span>{fieldReport.absentCount || 0} absent</span>
                 </div>
               </div>
               
@@ -411,10 +503,11 @@ export default function Reports() {
                   setSelectedField(fieldReport.fieldName);
                   loadFieldAbsentees(fieldReport.fieldName);
                 }}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                disabled={loading}
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
               >
                 <Eye className="w-4 h-4" />
-                <span>View Absentees</span>
+                <span>{loading ? 'Loading...' : 'View Absentees'}</span>
               </button>
             </div>
           ))}
@@ -548,7 +641,7 @@ export default function Reports() {
                 {selectedField} - Attendance Report
               </h1>
               <p className="text-gray-500 dark:text-gray-400 mt-1">
-                {selectedFieldData ? `${selectedFieldData.absentCount} absent, ${selectedFieldData.presentCount} present` : 'Loading...'} • {getReportDescription()}
+                {selectedFieldData ? `${selectedFieldData.absentCount || 0} absent, ${selectedFieldData.presentCount || 0} present` : 'Loading...'} • {getReportDescription()}
               </p>
             </div>
           </div>
@@ -610,7 +703,7 @@ export default function Reports() {
                 </div>
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Attendance Rate</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{selectedFieldData.attendanceRate.toFixed(1)}%</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatAttendanceRate(selectedFieldData.attendanceRate)}%</p>
                 </div>
               </div>
             </div>
